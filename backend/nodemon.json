@@ -1,0 +1,5 @@
+{
+  "watch": ["server.ts", "config", "routes", "utils"],
+  "ext": "ts,json",
+  "ignore": ["dist", "node_modules"]
+}

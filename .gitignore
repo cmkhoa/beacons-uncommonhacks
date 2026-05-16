@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+/dist
+/build
+
+# Environment variables & Secrets
+.env
+.env.local
+.env.development.local
+firebase-credentials.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vite cache
+.vite/
+.vite_temp*/
