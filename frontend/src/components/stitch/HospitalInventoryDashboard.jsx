@@ -5,11 +5,11 @@ const STATUS_UI = {
   CRITICAL_SHORTAGE: {
     label: 'Shortage',
     badge:
-      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error text-white text-[11px] font-bold shadow-sm border border-error/20',
+      'inline-block w-20 text-center text-sm font-semibold text-error',
     icon: 'warning',
-    row: 'bg-red-50/30 hover:bg-red-50/50',
+    row: 'bg-white hover:bg-surface-bright',
     input:
-      'w-16 h-9 border border-error rounded-lg px-1 text-center font-mono text-sm text-error focus:ring-4 focus:ring-error/10 outline-none bg-white font-bold',
+      'w-16 h-9 border border-error rounded-lg px-1 text-center font-mono text-sm text-error focus:ring-4 focus:ring-error/10 outline-none bg-white font-semibold',
     stock: 'text-error font-bold',
     iconBox: 'bg-red-100 border-red-200 animate-pulse',
     iconColor: 'text-red-600 fill-1',
@@ -17,9 +17,9 @@ const STATUS_UI = {
   LOW: {
     label: 'Low',
     badge:
-      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-bold border border-amber-100',
+      'inline-block w-20 text-center text-sm font-semibold text-amber-700',
     icon: 'trending_down',
-    row: 'bg-amber-50/20 hover:bg-amber-50/40',
+    row: 'bg-white hover:bg-surface-bright',
     input:
       'w-16 h-9 border border-amber-300 rounded-lg px-1 text-center font-mono text-sm text-amber-800 focus:ring-2 focus:ring-amber-200 outline-none bg-white',
     stock: 'text-amber-800',
@@ -29,9 +29,9 @@ const STATUS_UI = {
   ADEQUATE: {
     label: 'Optimal',
     badge:
-      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-100',
+      'inline-block w-20 text-center text-sm font-semibold text-emerald-700',
     icon: null,
-    row: 'hover:bg-surface-bright',
+    row: 'bg-white hover:bg-surface-bright',
     input:
       'w-16 h-9 border border-outline-variant rounded-lg px-1 text-center font-mono text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none',
     stock: 'text-on-surface',
@@ -41,9 +41,9 @@ const STATUS_UI = {
   SURPLUS: {
     label: 'Surplus',
     badge:
-      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-container text-white text-[11px] font-bold shadow-sm',
+      'inline-block w-20 text-center text-sm font-semibold text-primary',
     icon: 'arrow_upward',
-    row: 'hover:bg-surface-bright',
+    row: 'bg-white hover:bg-surface-bright',
     input:
       'w-16 h-9 border border-outline-variant rounded-lg px-1 text-center font-mono text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none',
     stock: 'text-on-surface',
@@ -71,7 +71,6 @@ const CATEGORY_LABELS = {
 const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
   const [rows, setRows] = useState([]);
   const [drafts, setDrafts] = useState({});
-  const [scopedHospitalName, setScopedHospitalName] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -91,11 +90,9 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
       if (hospitalId) {
         const hJson = await apiGet(`/api/hospitals/${hospitalId}`);
         if (hJson.hospital) hospitals = [hJson.hospital];
-        setScopedHospitalName(hJson.hospital.name ?? null);
       } else {
         const hJson = await apiGet('/api/hospitals?hydrate=true');
         hospitals = hJson.hospitals ?? [];
-        setScopedHospitalName(null);
       }
 
       const flat = hospitals.flatMap((h) =>
@@ -107,6 +104,7 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
             hospitalId: entry.hospitalId ?? h.id,
             hospitalName: h.name,
             itemName: item?.name ?? entry.itemId,
+            unit: item?.unit ?? 'units',
             category,
             categoryLabel: CATEGORY_LABELS[category] ?? category,
             count: entry.count ?? 0,
@@ -204,17 +202,8 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
         isEmbedded ? '' : 'h-screen'
       }`}
     >
-      <main className="flex-1 overflow-y-auto p-6 md:p-10">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-on-surface">Hospital Inventory</h2>
-            <p className="text-sm text-on-surface-variant mt-1">
-              {isSingleHospital && scopedHospitalName
-                ? `Showing supplies at ${scopedHospitalName} only.`
-                : 'Regional view — all hospitals. Nurses only edit their own hospital.'}
-            </p>
-          </div>
-
+      <main className="flex-1 overflow-y-auto bg-white">
+        <div className="w-full">
           {feedback && (
             <div
               className={`mb-4 px-4 py-3 rounded-lg text-sm border ${
@@ -229,19 +218,19 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
             </div>
           )}
 
-          <div className="bg-white border border-outline-variant rounded-2xl overflow-hidden shadow-xl">
-            <div className="bg-surface-container-low px-8 py-4 border-b border-outline-variant grid grid-cols-12 gap-4 items-center">
-              <div className="col-span-5 md:col-span-4 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
-                Item Designation
+          <div className="bg-white border-y border-outline-variant overflow-hidden">
+            <div className="bg-white px-8 py-4 border-b border-outline-variant grid grid-cols-12 gap-4 items-center">
+              <div className="col-span-5 md:col-span-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                Item
               </div>
-              <div className="col-span-3 md:col-span-2 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest text-right">
-                Current Stock
+              <div className="col-span-3 md:col-span-2 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">
+                Count
               </div>
-              <div className="col-span-4 md:col-span-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest text-center">
-                System Status
+              <div className="col-span-4 md:col-span-3 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-center">
+                Status
               </div>
-              <div className="hidden md:block md:col-span-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest text-right">
-                Manual Correction
+              <div className="hidden md:block md:col-span-3 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">
+                Adjustment
               </div>
             </div>
 
@@ -285,34 +274,26 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
                           </span>
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-on-surface">
+                          <p className="text-sm font-semibold text-on-surface">
                             {row.itemName}
                           </p>
-                          <p className="text-[11px] text-on-surface-variant font-medium">
+                          <p className="text-sm text-on-surface-variant">
                             {isSingleHospital ? row.categoryLabel : row.hospitalName}
                           </p>
                         </div>
                       </div>
 
                       <div
-                        className={`col-span-3 md:col-span-2 text-right font-mono text-base font-semibold ${ui.stock}`}
+                        className={`col-span-3 md:col-span-2 text-right font-mono text-sm font-semibold ${ui.stock}`}
                       >
                         {row.count.toLocaleString()}{' '}
-                        <span className="text-on-surface-variant font-sans text-xs font-normal">
-                          units
+                        <span className="text-on-surface-variant font-sans text-sm font-normal">
+                          {row.unit}
                         </span>
                       </div>
 
                       <div className="col-span-4 md:col-span-3 flex justify-center">
                         <span className={ui.badge}>
-                          {ui.icon && (
-                            <span className="material-symbols-outlined text-[14px]">
-                              {ui.icon}
-                            </span>
-                          )}
-                          {!ui.icon && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          )}
                           {ui.label}
                         </span>
                       </div>
@@ -351,36 +332,23 @@ const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-container-low/50 p-4 rounded-2xl border border-dashed border-outline-variant">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-on-surface-variant">
-                info
-              </span>
-              <p className="text-xs text-on-surface-variant font-medium italic">
-                {dirtyIds.length > 0
-                  ? `${dirtyIds.length} unsaved correction(s)`
-                  : 'Adjust counts with +/− then commit'}
-              </p>
-            </div>
-            <div className="flex gap-3 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={discard}
-                disabled={dirtyIds.length === 0 || submitting}
-                className="flex-1 sm:flex-none px-8 py-3 rounded-xl border border-outline-variant bg-white text-on-surface-variant font-bold text-sm hover:bg-surface-container transition-all shadow-sm disabled:opacity-50"
-              >
-                Discard Changes
-              </button>
-              <button
-                type="button"
-                onClick={commit}
-                disabled={dirtyIds.length === 0 || submitting}
-                className="flex-1 sm:flex-none px-8 py-3 rounded-xl bg-primary text-white font-bold text-sm hover:shadow-lg hover:opacity-90 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[20px]">sync</span>
-                {submitting ? 'Committing…' : 'Commit to Network'}
-              </button>
-            </div>
+          <div className="flex justify-end gap-2 px-8 py-3 bg-white">
+            <button
+              type="button"
+              onClick={discard}
+              disabled={dirtyIds.length === 0 || submitting}
+              className="px-4 py-2 rounded-lg border border-outline-variant bg-white text-on-surface-variant font-bold text-xs hover:bg-surface-container transition-all disabled:opacity-50"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={commit}
+              disabled={dirtyIds.length === 0 || submitting}
+              className="px-4 py-2 rounded-lg bg-primary text-white font-bold text-xs hover:opacity-90 transition-all disabled:opacity-50"
+            >
+              {submitting ? 'Saving…' : 'Save'}
+            </button>
           </div>
         </div>
       </main>

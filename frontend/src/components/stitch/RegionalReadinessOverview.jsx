@@ -14,14 +14,14 @@ const STATUS_LABEL = {
   ADEQUATE: 'Optimal',
   SURPLUS: 'Surplus',
   LOW: 'Low',
-  CRITICAL_SHORTAGE: 'Critical',
+  CRITICAL_SHORTAGE: 'Shortage',
 };
 
 const STATUS_BADGE = {
-  ADEQUATE: 'bg-emerald-50 text-emerald-800 border-emerald-100',
-  SURPLUS: 'bg-sky-50 text-sky-800 border-sky-100',
-  LOW: 'bg-amber-50 text-amber-800 border-amber-100',
-  CRITICAL_SHORTAGE: 'bg-red-100 text-red-800 border-red-200 animate-pulse',
+  ADEQUATE: 'text-emerald-700',
+  SURPLUS: 'text-sky-700',
+  LOW: 'text-amber-700',
+  CRITICAL_SHORTAGE: 'text-error',
 };
 
 const CHICAGO_CENTER = { latitude: 41.8781, longitude: -87.6298 };
@@ -113,7 +113,6 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
           score: healthScore(entries),
           status: deriveHospitalStatus(entries),
           sector: sectorFromLocation(h.location),
-          entryCount: entries.length,
         };
       })
       .sort((a, b) => b.score - a.score);
@@ -139,7 +138,12 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
       slot.total += 1;
       if (e.status === 'ADEQUATE' || e.status === 'SURPLUS') slot.healthy += 1;
     }
-    return CATEGORY_ORDER.filter((c) => byCat.has(c)).map((c) => {
+    const orderedCategories = [
+      ...CATEGORY_ORDER.filter((c) => byCat.has(c)),
+      ...[...byCat.keys()].filter((c) => !CATEGORY_ORDER.includes(c)),
+    ];
+
+    return orderedCategories.map((c) => {
       const slot = byCat.get(c);
       return {
         category: c,
@@ -195,13 +199,13 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
   };
 
   return (
-    <div className={`flex flex-col h-full overflow-hidden bg-surface-bright ${isEmbedded ? '' : 'h-screen'}`}>
+    <div className={`flex flex-col h-full overflow-hidden bg-white ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Page Header */}
-      <header className="flex-shrink-0 px-6 md:px-10 py-8 border-b border-outline-variant bg-white flex flex-col md:flex-row md:justify-between md:items-end gap-6">
+      <header className="flex-shrink-0 px-8 py-5 border-b border-outline-variant bg-white flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-on-surface tracking-tight">Regional Readiness</h2>
-          <p className="text-sm text-on-surface-variant mt-2 max-w-2xl leading-relaxed">
-            Real-time network resilience metrics across all active sectors. Autonomous agents are monitoring supply trends to prevent regional outages.
+          <h2 className="text-lg font-bold text-on-surface tracking-tight">Regional Analytics</h2>
+          <p className="text-sm text-on-surface-variant mt-1">
+            Network supply metrics across active hospitals.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -209,16 +213,16 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
             type="button"
             onClick={handleExport}
             disabled={loading || !summary}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white text-on-surface border border-outline-variant rounded-xl hover:bg-surface-container transition-all text-sm font-bold shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-on-surface border border-outline-variant rounded-lg hover:bg-surface-container transition-all text-sm font-bold disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[18px]">download</span>
-            Export Analytics
+            Export
           </button>
           <button
             type="button"
             onClick={handleRefresh}
             disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl hover:shadow-lg hover:opacity-90 transition-all text-sm font-bold shadow-md disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-all text-sm font-bold disabled:opacity-60"
           >
             <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>
               {loading ? 'progress_activity' : 'refresh'}
@@ -235,72 +239,60 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
       )}
 
       {/* Main Analytics Canvas */}
-      <main className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8">
-        <div className="max-w-[1400px] mx-auto space-y-8">
+      <main className="flex-1 overflow-y-auto bg-white">
+        <div className="w-full min-h-full flex flex-col">
           {/* KPI Bento Strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="bg-white border border-outline-variant rounded-2xl p-6 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow group">
+          <div className="grid grid-cols-2 md:grid-cols-4 border-b border-outline-variant">
+            <div className="bg-white border-r border-outline-variant p-5 flex flex-col gap-3">
               <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Avg Network Health</span>
-                <div className="p-2 bg-primary/5 rounded-lg group-hover:bg-primary group-hover:text-white transition-all">
-                  <span className="material-symbols-outlined text-[20px] fill-1">speed</span>
-                </div>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Avg Network Health</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className={`text-4xl font-bold tracking-tighter ${scoreColor(readinessPct)}`}>
+                <span className={`text-2xl font-bold ${scoreColor(readinessPct)}`}>
                   {loading && !summary ? '—' : `${readinessPct}%`}
                 </span>
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">
+                <span className="text-xs font-semibold text-on-surface-variant">
                   {summary ? `${summary.inventoryEntryCount} entries` : ''}
                 </span>
               </div>
             </div>
 
-            <div className="bg-white border border-outline-variant rounded-2xl p-6 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="bg-white border-r border-outline-variant p-5 flex flex-col gap-3">
               <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">At-Risk Nodes</span>
-                <div className="p-2 bg-red-50 rounded-lg group-hover:bg-error group-hover:text-white transition-all">
-                  <span className="material-symbols-outlined text-[20px] fill-1">warning</span>
-                </div>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">At-Risk Nodes</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-on-surface tracking-tighter">
+                <span className="text-2xl font-bold text-on-surface">
                   {loading && !summary
                     ? '—'
                     : String(summary?.hospitalsWithCritical ?? 0).padStart(2, '0')}
                 </span>
-                <span className="text-[10px] font-bold text-error uppercase tracking-tight bg-red-50 px-2 py-0.5 rounded border border-red-100">
+                <span className="text-xs font-semibold text-error">
                   {summary?.criticalShortages ?? 0} Critical Items
                 </span>
               </div>
             </div>
 
-            <div className="bg-white border border-outline-variant rounded-2xl p-6 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="bg-white border-r border-outline-variant p-5 flex flex-col gap-3">
               <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Active Transfers</span>
-                <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <span className="material-symbols-outlined text-[20px] fill-1">local_shipping</span>
-                </div>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Active Transfers</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-on-surface tracking-tighter">
+                <span className="text-2xl font-bold text-on-surface">
                   {loading ? '—' : String(activeTransferCount).padStart(2, '0')}
                 </span>
-                <span className="text-[10px] font-bold text-secondary uppercase tracking-tight bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                <span className="text-xs font-semibold text-secondary">
                   In Transit
                 </span>
               </div>
             </div>
 
-            <div className="bg-white border border-outline-variant rounded-2xl p-6 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="bg-white p-5 flex flex-col gap-3">
               <div className="flex justify-between items-start">
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">System Integrity</span>
-                <div className="p-2 bg-secondary/5 rounded-lg group-hover:bg-secondary group-hover:text-white transition-all">
-                  <span className="material-symbols-outlined text-[20px] fill-1">shield</span>
-                </div>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">System Integrity</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className={`text-3xl font-bold tracking-tighter uppercase ${systemIntegrityColor}`}>
+                <span className={`text-2xl font-bold ${systemIntegrityColor}`}>
                   {loading && !summary ? '—' : systemIntegrityLabel}
                 </span>
               </div>
@@ -308,37 +300,30 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
           </div>
 
           {/* Leaderboard and Trends Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 flex-1 min-h-0">
             {/* Hospital Readiness Leaderboard */}
-            <div className="lg:col-span-8 bg-white border border-outline-variant rounded-2xl flex flex-col overflow-hidden shadow-xl">
-              <div className="bg-surface-container-low px-8 py-5 border-b border-outline-variant flex justify-between items-center">
-                <h3 className="text-lg font-bold text-on-surface">Regional Leaderboard</h3>
-                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
-                  {leaderboard.length} {leaderboard.length === 1 ? 'facility' : 'facilities'}
-                </span>
-              </div>
+            <div className="lg:col-span-8 bg-white border-r border-outline-variant flex flex-col overflow-hidden min-h-full">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-surface-bright/50 border-b border-outline-variant">
-                      <th className="px-8 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Facility Name</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Sector</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Score</th>
-                      <th className="px-6 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Live Status</th>
-                      <th className="px-8 py-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest text-right">Entries</th>
+                    <tr className="bg-white border-b border-outline-variant">
+                      <th className="px-8 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Facility</th>
+                      <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Area</th>
+                      <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Score</th>
+                      <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-container">
                     {loading && leaderboard.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-8 py-10 text-center text-sm text-on-surface-variant">
+                        <td colSpan={4} className="px-8 py-10 text-center text-sm text-on-surface-variant">
                           Loading facilities…
                         </td>
                       </tr>
                     )}
                     {!loading && leaderboard.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-8 py-10 text-center text-sm text-on-surface-variant">
+                        <td colSpan={4} className="px-8 py-10 text-center text-sm text-on-surface-variant">
                           No hospitals found in the network.
                         </td>
                       </tr>
@@ -348,15 +333,11 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
                       return (
                         <tr
                           key={row.id}
-                          className={`group transition-colors ${
-                            isCritical
-                              ? 'bg-red-50/10 hover:bg-red-50/20'
-                              : 'hover:bg-surface-bright'
-                          }`}
+                          className="bg-white hover:bg-surface-bright transition-colors"
                         >
                           <td className="px-8 py-5 flex items-center gap-4">
                             <div
-                              className={`w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-110 transition-transform ${
+                              className={`w-10 h-10 text-white flex items-center justify-center font-bold text-sm ${
                                 isCritical ? 'bg-error' : 'bg-primary-container'
                               }`}
                             >
@@ -369,21 +350,18 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
                           <td className="px-6 py-5 text-on-surface-variant font-medium text-sm">
                             {row.sector}
                           </td>
-                          <td className={`px-6 py-5 font-mono text-base font-bold ${scoreColor(row.score)}`}>
+                          <td className={`px-6 py-5 font-mono text-sm font-semibold ${scoreColor(row.score)}`}>
                             {row.score}%
                           </td>
                           <td className="px-6 py-5">
                             <span
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${
+                              className={`inline-block w-20 text-sm font-semibold ${
                                 STATUS_BADGE[row.status] ??
-                                'bg-zinc-50 text-zinc-700 border-zinc-200'
+                                'text-zinc-700'
                               }`}
                             >
                               {STATUS_LABEL[row.status] ?? row.status}
                             </span>
-                          </td>
-                          <td className="px-8 py-5 text-right text-sm text-on-surface-variant font-mono">
-                            {row.entryCount}
                           </td>
                         </tr>
                       );
@@ -393,22 +371,25 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
               </div>
             </div>
 
-            {/* Trends and Critical Sectors */}
-            <div className="lg:col-span-4 flex flex-col gap-8">
-              {/* Supply Trend Visualization */}
-              <div className="bg-white border border-outline-variant rounded-2xl flex flex-col overflow-hidden h-72 shadow-xl">
-                <div className="bg-surface-container-low px-6 py-4 border-b border-outline-variant flex justify-between items-center">
-                  <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">By Category</h3>
-                  <span className="material-symbols-outlined text-on-surface-variant text-[20px]">trending_up</span>
+            {/* Category Analytics */}
+            <div className="lg:col-span-4 flex flex-col min-h-full">
+              <div className="bg-white flex flex-col overflow-hidden flex-1 min-h-0">
+                <div className="bg-white px-8 py-4 border-b border-outline-variant flex items-center">
+                  <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">By Category</h3>
                 </div>
-                <div className="flex-1 p-6 flex flex-col justify-end relative bg-white overflow-hidden">
+                <div className="flex-1 p-6 bg-white overflow-hidden">
                   {categoryHealth.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center text-xs text-on-surface-variant">
                       {loading ? 'Loading…' : 'No category data.'}
                     </div>
                   ) : (
-                    <>
-                      <div className="absolute inset-0 flex items-end justify-between px-6 pb-10 pt-10 gap-3">
+                    <div className="h-full flex flex-col justify-end">
+                      <div
+                        className="flex-1 grid items-end gap-3"
+                        style={{
+                          gridTemplateColumns: `repeat(${categoryHealth.length}, minmax(0, 1fr))`,
+                        }}
+                      >
                         {categoryHealth.map((c) => {
                           const barColor =
                             c.pct >= 80
@@ -419,82 +400,36 @@ const RegionalReadinessOverview = ({ isEmbedded = false }) => {
                           return (
                             <div
                               key={c.category}
-                              className="flex-1 flex flex-col items-center justify-end h-full"
+                              className="flex flex-col items-center justify-end h-full"
                               title={`${c.label}: ${c.healthy}/${c.total} healthy`}
                             >
-                              <span className="text-[10px] font-bold text-on-surface mb-1">
+                              <span className="text-xs font-bold text-on-surface mb-1">
                                 {c.pct}%
                               </span>
                               <div
-                                className={`w-full rounded-t-lg ${barColor} transition-all`}
+                                className={`w-full ${barColor} transition-all`}
                                 style={{ height: `${Math.max(c.pct, 4)}%` }}
                               />
                             </div>
                           );
                         })}
                       </div>
-                      <div className="relative z-10 flex justify-between items-end w-full border-t border-outline-variant pt-3">
+                      <div
+                        className="grid items-end w-full border-t border-outline-variant pt-3"
+                        style={{
+                          gridTemplateColumns: `repeat(${categoryHealth.length}, minmax(0, 1fr))`,
+                        }}
+                      >
                         {categoryHealth.map((c) => (
                           <span
                             key={c.category}
-                            className="text-[10px] font-bold text-on-surface-variant flex-1 text-center"
+                            className="text-xs font-bold text-on-surface-variant text-center"
                           >
                             {c.label}
                           </span>
                         ))}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Critical Sectors */}
-              <div className="bg-white border border-outline-variant rounded-2xl flex flex-col overflow-hidden h-72 relative shadow-xl">
-                <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-                  <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">Critical Sectors</h3>
-                  <button
-                    type="button"
-                    onClick={handleRefresh}
-                    className="text-on-surface-variant hover:text-on-surface transition-colors"
-                    title="Refresh"
-                  >
-                    <span className={`material-symbols-outlined text-[20px] ${loading ? 'animate-spin' : ''}`}>
-                      refresh
-                    </span>
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                  {criticalHospitals.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                      <span className="material-symbols-outlined text-[36px] text-emerald-500 mb-2">
-                        verified
-                      </span>
-                      <p className="text-sm font-bold text-on-surface">
-                        All sectors stable
-                      </p>
-                      <p className="text-[11px] text-on-surface-variant mt-1">
-                        No critical shortages detected in the network.
-                      </p>
                     </div>
-                  ) : (
-                    criticalHospitals.map((h) => (
-                      <div
-                        key={h.id}
-                        className="border border-red-200 bg-red-50/40 rounded-xl px-3 py-2 flex items-center justify-between"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-error truncate">
-                            {h.name}
-                          </p>
-                          <p className="text-[11px] text-on-surface-variant">
-                            {h.sector} sector
-                          </p>
-                        </div>
-                        <span className="font-mono text-sm font-bold text-error shrink-0 ml-3">
-                          {h.score}%
-                        </span>
-                      </div>
-                    ))
                   )}
                 </div>
               </div>

@@ -8,6 +8,9 @@ const TopBar = ({
   onOpenNursePanel,
   onGoToTransferMap,
   isVisualizationOpen = false,
+  canToggleSidebar = false,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -27,15 +30,28 @@ const TopBar = ({
 
   return (
     <header className="bg-surface flex justify-between items-center w-full px-4 md:px-8 h-16 border-b border-outline-variant z-50 shrink-0">
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onGoToTransferMap}
-          className="text-2xl font-bold text-primary tracking-tight hover:opacity-80 transition-opacity cursor-pointer"
+          className="text-lg font-bold text-primary tracking-tight hover:opacity-80 transition-opacity cursor-pointer"
           title="Go to Transfer Map"
         >
           Beacon
         </button>
+        {canToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="h-8 w-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+            title={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            aria-label={isSidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              {isSidebarCollapsed ? 'menu_open' : 'menu'}
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
@@ -53,7 +69,7 @@ const TopBar = ({
               {displayName}
             </span>
             {subtitle && (
-              <span className="text-[11px] text-on-surface-variant block leading-tight">
+              <span className="text-xs text-on-surface-variant block leading-tight">
                 {subtitle}
               </span>
             )}

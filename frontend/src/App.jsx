@@ -13,6 +13,7 @@ function App() {
   const [session, setSessionState] = useState(null);
   const [dispatcherTab, setDispatcherTab] = useState('map');
   const [activeView, setActiveView] = useState('default');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const stored = getSession();
@@ -25,6 +26,13 @@ function App() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const resize = () => window.dispatchEvent(new Event('resize'));
+    resize();
+    const timer = window.setTimeout(resize, 320);
+    return () => window.clearTimeout(timer);
+  }, [sidebarCollapsed]);
 
   const handleLogin = (nextSession) => {
     setSession(nextSession);
@@ -41,6 +49,7 @@ function App() {
 
   const handleOpenVisualization = () => {
     setActiveView('visualization');
+    setSidebarCollapsed(false);
   };
 
   const handleOpenNursePanel = () => {
@@ -51,12 +60,15 @@ function App() {
     setDispatcherTab('map');
     if (session.role === 'nurse' || session.role === 'admin') {
       setActiveView('visualization');
+      setSidebarCollapsed(false);
     }
   };
 
   if (!session) {
     return <RoleLogin onLogin={handleLogin} />;
   }
+
+  const showSidebar = session.role !== 'nurse' || activeView === 'visualization';
 
   const renderView = () => {
     if (activeView === 'visualization') {
@@ -83,14 +95,18 @@ function App() {
         onOpenNursePanel={handleOpenNursePanel}
         onGoToTransferMap={handleGoToTransferMap}
         isVisualizationOpen={activeView === 'visualization'}
+        canToggleSidebar={showSidebar}
+        isSidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((collapsed) => !collapsed)}
       />
       <div className="flex flex-1 overflow-hidden">
-        {(session.role !== 'nurse' || activeView === 'visualization') && (
+        {showSidebar && (
           <Sidebar
             role={activeView === 'visualization' ? 'dispatcher' : session.role}
             session={session}
             dispatcherTab={dispatcherTab}
             onDispatcherTabChange={setDispatcherTab}
+            collapsed={sidebarCollapsed}
           />
         )}
         <main className="flex-1 overflow-hidden relative bg-surface-bright">

@@ -3,21 +3,35 @@ import React from 'react';
 const DISPATCHER_TABS = [
   { id: 'map', label: 'Transfer Map', icon: 'map' },
   { id: 'inventory', label: 'Hospital Inventory', icon: 'inventory_2' },
-  { id: 'matchmaker', label: 'Supply Matchmaker', icon: 'hub' },
-  { id: 'readiness', label: 'Regional Readiness', icon: 'health_and_safety' },
+  { id: 'matchmaker', label: 'Volunteer Supply', icon: 'hub' },
+  { id: 'readiness', label: 'Regional Analytics', icon: 'health_and_safety' },
 ];
 
-const Sidebar = ({ role, session, dispatcherTab, onDispatcherTabChange }) => {
+const Sidebar = ({
+  role,
+  session,
+  dispatcherTab,
+  onDispatcherTabChange,
+  collapsed = false,
+}) => {
   return (
-    <nav className="hidden md:flex flex-col h-full w-[280px] bg-surface border-r border-outline-variant p-4 gap-2 shrink-0 z-40">
-      {role === 'dispatcher' ? (
-        <DispatcherNav
-          dispatcherTab={dispatcherTab}
-          onDispatcherTabChange={onDispatcherTabChange}
-        />
-      ) : (
-        <div className="flex-1" />
-      )}
+    <nav
+      className={`hidden md:flex flex-col h-full bg-surface border-r border-outline-variant gap-2 z-40 overflow-hidden transition-[flex-basis,padding,border-width] duration-300 ease-in-out ${
+        collapsed
+          ? 'basis-0 min-w-0 max-w-0 border-r-0 p-0'
+          : 'basis-[280px] min-w-[280px] max-w-[280px] p-4'
+      }`}
+    >
+      <div className="w-[248px]">
+        {role === 'dispatcher' ? (
+          <DispatcherNav
+            dispatcherTab={dispatcherTab}
+            onDispatcherTabChange={onDispatcherTabChange}
+          />
+        ) : (
+          <div className="flex-1" />
+        )}
+      </div>
 
     </nav>
   );
@@ -39,7 +53,7 @@ function DispatcherNav({ dispatcherTab, onDispatcherTabChange }) {
                 : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
             }`}
           >
-            <span className={`material-symbols-outlined ${active ? 'fill-1' : ''}`}>
+            <span className={`material-symbols-outlined text-[20px] ${active ? 'fill-1' : ''}`}>
               {item.icon}
             </span>
             {item.label}

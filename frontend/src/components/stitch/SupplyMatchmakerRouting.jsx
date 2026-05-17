@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../../lib/api";
 
-const STATUS_PILL = {
-  PENDING: "bg-amber-50 text-amber-700 border border-amber-200",
-  APPROVED: "bg-sky-50 text-sky-700 border border-sky-200",
-  IN_TRANSIT: "bg-indigo-50 text-indigo-700 border border-indigo-200",
-  COMPLETED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  CANCELLED: "bg-zinc-100 text-zinc-600 border border-zinc-200",
+const STATUS_TEXT = {
+  PENDING: "text-amber-700",
+  APPROVED: "text-sky-700",
+  IN_TRANSIT: "text-indigo-700",
+  COMPLETED: "text-emerald-700",
+  CANCELLED: "text-zinc-600",
 };
 
 const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
@@ -162,9 +162,9 @@ const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
   const renderActions = (req) => {
     const isBusy = busyId === req.requestId;
     const baseBtn =
-      "inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed";
+      "inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed";
     const readOnly = (text) => (
-      <span className="text-[11px] text-on-surface-variant italic">{text}</span>
+      <span className="text-xs text-on-surface-variant italic">{text}</span>
     );
 
     if (canManage) {
@@ -242,42 +242,12 @@ const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
 
   return (
     <div
-      className={`flex flex-col h-full overflow-hidden bg-background ${
+      className={`flex flex-col h-full overflow-hidden bg-white ${
         isEmbedded ? "" : "h-screen"
       }`}
     >
-      <main className="flex-1 overflow-y-auto p-6 md:p-10">
-        <section className="max-w-6xl mx-auto bg-white border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-outline-variant flex justify-between items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-on-surface">
-                Transfer Missions
-              </h2>
-              <p className="text-sm text-on-surface-variant mt-1">
-                {canManage
-                  ? "Assign donors, approve, and complete transfer missions."
-                  : canVolunteer
-                  ? "Volunteer your hospital as the donor for unassigned requests."
-                  : "View active transfer missions."}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={loadAll}
-              disabled={loading}
-              className="inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
-              title="Refresh"
-            >
-              <span
-                className={`material-symbols-outlined text-[16px] ${
-                  loading ? "animate-spin" : ""
-                }`}
-              >
-                refresh
-              </span>
-              Refresh
-            </button>
-          </div>
+      <main className="flex-1 overflow-y-auto bg-white">
+        <section className="w-full bg-white border-y border-outline-variant overflow-hidden">
 
           {feedback && (
             <div
@@ -306,56 +276,55 @@ const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-surface-container-lowest text-on-surface-variant">
+                <thead className="bg-white text-on-surface-variant">
                   <tr className="border-b border-outline-variant">
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest">
                       Mission
                     </th>
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest">
                       Requester
                     </th>
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest">
                       Donor
                     </th>
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest">
                       Item
                     </th>
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-widest text-right">
+                    <th className="px-8 py-4 text-xs font-bold uppercase tracking-widest text-right">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant">
                   {requests.map((request) => {
-                    const pillClass =
-                      STATUS_PILL[request.status] ??
-                      "bg-surface-container text-on-surface-variant border border-outline-variant";
+                    const statusClass =
+                      STATUS_TEXT[request.status] ?? "text-on-surface-variant";
                     return (
                       <tr
                         key={request.requestId ?? request.id}
-                        className="hover:bg-surface-bright"
+                        className="bg-white hover:bg-surface-bright"
                       >
-                        <td className="px-6 py-4 font-mono text-xs text-on-surface-variant">
+                        <td className="px-8 py-5 font-mono text-sm text-on-surface-variant">
                           {(request.requestId ?? request.id ?? "").slice(0, 8)}
                         </td>
-                        <td className="px-6 py-4 font-medium text-on-surface">
+                        <td className="px-8 py-5 font-semibold text-on-surface">
                           {request.fromHospitalName ?? request.fromHospitalId}
                         </td>
-                        <td className="px-6 py-4 text-on-surface">
+                        <td className="px-8 py-5 text-on-surface">
                           {request.toHospitalName || request.toHospitalId ? (
                             <span>
                               {request.toHospitalName ?? request.toHospitalId}
                             </span>
                           ) : (
-                            <span className="inline-flex rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide">
+                            <span className="text-sm font-semibold text-amber-700">
                               Unassigned
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-on-surface">
+                        <td className="px-8 py-5 text-on-surface">
                           <span className="font-medium">
                             {request.itemName}
                           </span>
@@ -364,14 +333,12 @@ const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
                             × {request.quantity}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${pillClass}`}
-                          >
+                        <td className="px-8 py-5">
+                          <span className={`inline-block w-20 text-sm font-semibold ${statusClass}`}>
                             {request.status ?? "PENDING"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-8 py-5 text-right">
                           {renderActions(request)}
                         </td>
                       </tr>
