@@ -274,14 +274,14 @@ export async function processInventoryUpdate(
   // 3. Auto-transfer if shortage
   let transferCreated = false;
   if (newStatus === "LOW" || newStatus === "CRITICAL_SHORTAGE") {
-    const quantityNeeded = Math.max(entry.threshold - newAvailableCount, 1);
-    const transferRequest = await autoCreateTransfer(
-      hospital,
-      entry.itemId,
-      quantityNeeded,
-      newStatus
-    );
-    transferCreated = transferRequest !== null;
+      const quantityNeeded = Math.max(entry.threshold - newAvailableCount, 1);
+      const transferRequest = await autoCreateTransfer(
+        hospital,
+        entry.itemId,
+        quantityNeeded,
+        newStatus
+      );
+      transferCreated = transferRequest !== null;
   }
 
   return {
