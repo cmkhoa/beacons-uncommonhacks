@@ -3,6 +3,7 @@ import { Mic, MicOff, Volume2, X } from 'lucide-react';
 import { Conversation } from '@elevenlabs/client';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { apiGet } from '../lib/api';
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -26,18 +27,17 @@ export function VoiceAssistant({ hospitalId }) {
       // Fetch the current hospital's inventory and global items catalog to provide context to the LLM
       let inventoryContext = "No inventory data available.";
       try {
-        const [invRes, itemsRes] = await Promise.all([
-          fetch(`http://localhost:5000/api/hospitals/${hospitalId}/inventory`),
-          fetch(`http://localhost:5000/api/items`),
+        const [invData, itemsData] = await Promise.all([
+          apiGet(`/api/hospitals/${hospitalId}/inventory`),
+          apiGet('/api/items'),
         ]);
-        if (invRes.ok && itemsRes.ok) {
-          const invData = await invRes.json();
-          const itemsData = await itemsRes.json();
-          const itemMap = Object.fromEntries(itemsData.items.map(i => [i.id, i.name]));
-          inventoryContext = invData.inventory.map(entry =>
-            `${itemMap[entry.itemId] || entry.itemId} (entryId: ${entry.id})`
-          ).join(", ");
-        }
+        const itemMap = Object.fromEntries(itemsData.items.map((i) => [i.id, i.name]));
+        inventoryContext = invData.inventory
+          .map(
+            (entry) =>
+              `${itemMap[entry.itemId] || entry.itemId} (entryId: ${entry.id})`
+          )
+          .join(', ');
       } catch (err) {
         console.error("[Voice] Failed to fetch inventory context:", err);
       }

@@ -8,8 +8,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-
-const API_BASE = 'http://localhost:5000';
+import { apiGet, apiPatch } from '../lib/api';
 
 const STATUS_STYLES = {
   CRITICAL_SHORTAGE: 'bg-red-50 text-red-700 border-red-200',
@@ -68,15 +67,13 @@ const AdminView = () => {
   const refreshHospitals = async () => {
     setLoadingData(true);
     try {
-      const [hRes, iRes] = await Promise.all([
-        fetch(`${API_BASE}/api/hospitals?hydrate=true`),
-        fetch(`${API_BASE}/api/items`),
+      const [hData, iData] = await Promise.all([
+        apiGet('/api/hospitals?hydrate=true'),
+        apiGet('/api/items'),
       ]);
-      const hJson = await hRes.json();
-      const iJson = await iRes.json();
-      const list = hJson.hospitals ?? [];
+      const list = hData.hospitals ?? [];
       setHospitals(list);
-      setItems(iJson.items ?? []);
+      setItems(iData.items ?? []);
       if (!selectedHospitalId && list.length > 0) {
         setSelectedHospitalId(list[0].id);
       }
@@ -150,21 +147,8 @@ const AdminView = () => {
     }, 4500);
   };
 
-  const patchEntry = async (hospitalId, entryId, body) => {
-    const res = await fetch(
-      `${API_BASE}/api/hospitals/${hospitalId}/inventory/${entryId}`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error ?? `PATCH failed (${res.status})`);
-    }
-    return res.json();
-  };
+  const patchEntry = (hospitalId, entryId, body) =>
+    apiPatch(`/api/hospitals/${hospitalId}/inventory/${entryId}`, body);
 
   const handleManualSubmit = async (e) => {
     e.preventDefault();
@@ -181,7 +165,7 @@ const AdminView = () => {
     try {
       await patchEntry(selectedHospitalId, formEntryId, {
         change: delta,
-        source: 'MANUAL_FORM',
+        source: 'DEMO_BUTTON',
         message: `Admin manual update: ${delta > 0 ? '+' : ''}${delta}`,
       });
       flash(`Applied change of ${delta} to inventory entry.`);
@@ -590,6 +574,11 @@ const AdminView = () => {
                               {log.change}
                             </span>{' '}
                             ({log.previousCount} → {log.newCount})
+                          </p>
+                          <p className="text-[11px] text-on-surface-variant mt-0.5">
+                            {log.performedBy?.type === 'nurse'
+                              ? log.performedBy.name
+                              : log.performedBy?.label ?? 'System'}
                           </p>
                           {log.message && (
                             <p className="text-[11px] text-on-surface-variant italic mt-1 truncate">

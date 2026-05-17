@@ -1,37 +1,108 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { initialsFromName } from '../lib/session';
 
-const TopBar = () => {
+const TopBar = ({
+  session,
+  onLogout,
+  onOpenVisualization,
+  onOpenNursePanel,
+  isVisualizationOpen = false,
+}) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const displayName =
+    session?.userName
+      ? session.userName
+      : session?.role === 'admin'
+        ? 'Admin'
+        : 'Beacon User';
+
+  const subtitle =
+    session?.hospitalName
+      ? session.hospitalName
+      : null;
+
+  const initials = initialsFromName(displayName);
+
   return (
     <header className="bg-surface flex justify-between items-center w-full px-4 md:px-8 h-16 border-b border-outline-variant z-50 shrink-0">
       <div className="flex items-center gap-6">
         <span className="text-2xl font-bold text-primary tracking-tight">Beacon</span>
-        <div className="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 border border-outline-variant focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
-          <span className="material-symbols-outlined text-on-surface-variant mr-2 text-[20px]">search</span>
-          <input 
-            className="bg-transparent border-none focus:ring-0 text-sm text-on-surface placeholder:text-on-surface-variant w-64 outline-none" 
-            placeholder="Search region or hospital..." 
-            type="text"
-          />
-        </div>
       </div>
-      
+
       <div className="flex items-center gap-2 md:gap-4">
-        <div className="flex items-center gap-1 bg-surface-container rounded-full px-3 py-1.5 md:mr-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider hidden sm:inline">Agent Online</span>
-        </div>
-        
-        <button className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors relative active:scale-95">
-          <span className="material-symbols-outlined">monitor_heart</span>
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-error rounded-full border-2 border-surface"></span>
-        </button>
-        
-        <button className="flex items-center gap-2 p-1 pr-3 rounded-full hover:bg-surface-container transition-colors active:scale-95 border border-transparent hover:border-outline-variant">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="flex items-center gap-2 p-1 pr-3 rounded-full border border-transparent hover:bg-surface-container transition-colors"
+          >
           <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-white text-xs font-bold shadow-sm">
-            JD
+            {initials}
           </div>
-          <span className="text-sm font-semibold text-on-surface hidden md:inline">Nurse Jane</span>
-        </button>
+          <div className="hidden md:block text-left">
+            <span className="text-sm font-semibold text-on-surface block leading-tight">
+              {displayName}
+            </span>
+            {subtitle && (
+              <span className="text-[11px] text-on-surface-variant block leading-tight">
+                {subtitle}
+              </span>
+            )}
+          </div>
+          <span className="material-symbols-outlined text-on-surface-variant text-[18px]">
+            expand_more
+          </span>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-12 w-44 rounded-xl border border-outline-variant bg-white shadow-lg p-1 z-50">
+              {session?.role === 'nurse' && !isVisualizationOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenVisualization();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-left"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    hub
+                  </span>
+                  Visualization Tool
+                </button>
+              )}
+              {isVisualizationOpen && session?.userId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenNursePanel();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-left"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    medical_services
+                  </span>
+                  Nurse Panel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-left"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  logout
+                </span>
+                Log out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

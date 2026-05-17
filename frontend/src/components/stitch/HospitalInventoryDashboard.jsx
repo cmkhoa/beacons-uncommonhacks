@@ -3,37 +3,6 @@ import React from 'react';
 const HospitalInventoryDashboard = ({ isEmbedded = false }) => {
   return (
     <div className={`flex flex-col h-full overflow-hidden bg-surface-bright ${isEmbedded ? '' : 'h-screen'}`}>
-      {/* Page Header & Summary Bar */}
-      <header className="flex-shrink-0 px-6 md:px-10 py-8 border-b border-outline-variant bg-white flex flex-col md:flex-row md:justify-between md:items-end gap-6">
-        <div className="max-w-2xl">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest">Facility Dashboard</span>
-            <span className="text-on-surface-variant font-medium text-xs">Sector North-04</span>
-          </div>
-          <h2 className="text-3xl font-bold text-on-surface">Hospital Inventory</h2>
-          <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
-            Manage critical supplies and report shortages instantly. Autonomous agent is monitoring thresholds for automatic re-routing.
-          </p>
-        </div>
-        
-        {/* Readiness Score Card */}
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-5 flex items-center justify-between shadow-lg min-w-[280px]">
-          <div>
-            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Facility Readiness</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-primary">84</span>
-              <span className="text-lg text-on-surface-variant font-medium">/ 100</span>
-            </div>
-          </div>
-          <div className="h-16 w-16 rounded-full border-[6px] border-surface-container flex items-center justify-center relative shadow-inner">
-            <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-              <path className="text-primary" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeDasharray="84, 100" strokeWidth="4" strokeLinecap="round"></path>
-            </svg>
-            <span className="material-symbols-outlined text-primary text-2xl fill-1">health_and_safety</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content: Table Area */}
       <main className="flex-1 overflow-y-auto p-6 md:p-10">
         <div className="max-w-6xl mx-auto">
