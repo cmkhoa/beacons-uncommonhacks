@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase-admin/firestore";
+import { db } from "../config/firebase-config.js";
 import type { Hospital, InventoryEntry, TransferRequest } from "../models/index.js";
 import { calculateDistance } from "../utils/distance.js";
 import { getAllHospitals } from "./hospitalService.js";
@@ -6,6 +7,8 @@ import {
   createTransferRequest,
   getInventoryEntriesByItemId,
 } from "./inventoryService.js";
+
+const TRANSFER_REQUESTS = "transfer_requests";
 
 // ── Donor matching (pure) ───────────────────────────────────────────────
 
@@ -107,4 +110,48 @@ export async function autoCreateTransfer(
 
   const requestId = await createTransferRequest(trData);
   return { requestId, ...trData };
+}
+
+// ── Transfer request queries / mutations ────────────────────────────────
+
+/**
+ * Fetch all transfer requests that are still active
+ * (status not COMPLETED and not CANCELLED).
+ */
+export async function getActiveTransferRequests(): Promise<TransferRequest[]> {
+  const snap = await db
+    .collection(TRANSFER_REQUESTS)
+    .where("status", "not-in", ["COMPLETED", "CANCELLED"])
+    .get();
+
+  return snap.docs.map((d) => ({
+    requestId: d.id,
+    ...(d.data() as Omit<TransferRequest, "requestId">),
+  }));
+}
+
+/**
+ * Fetch a single transfer request by its document ID.
+ * Returns null if it does not exist.
+ */
+export async function getTransferRequestById(
+  requestId: string
+): Promise<TransferRequest | null> {
+  const doc = await db.collection(TRANSFER_REQUESTS).doc(requestId).get();
+  if (!doc.exists) return null;
+  return {
+    requestId: doc.id,
+    ...(doc.data() as Omit<TransferRequest, "requestId">),
+  };
+}
+
+/**
+ * Update a transfer request and return the latest version.
+ */
+export async function updateTransferRequest(
+  requestId: string,
+  updateData: Partial<Omit<TransferRequest, "requestId">>
+): Promise<TransferRequest | null> {
+  await db.collection(TRANSFER_REQUESTS).doc(requestId).update(updateData);
+  return getTransferRequestById(requestId);
 }
