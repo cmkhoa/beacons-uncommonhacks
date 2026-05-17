@@ -8,7 +8,7 @@ import itemsRouter from "./routes/items.js";
 import requestsRouter from "./routes/requests.js";
 import usersRouter from "./routes/users.js";
 import voiceRouter from "./routes/voice.js";
-
+import { scanAndCreateShortageRequests } from "./services/transferService.js";
 const app = express();
 const PORT = Number(process.env.PORT) || 5050;
 
@@ -25,4 +25,7 @@ app.use("/api/users", usersRouter);
 
 app.listen(PORT, () => {
   console.log(`[Beacon] API listening on http://localhost:${PORT}`);
+  scanAndCreateShortageRequests()
+    .then((n) => console.log(`[Beacon] Startup scan: ${n} shortage request(s) created`))
+    .catch((err) => console.error("[Beacon] Startup scan failed:", err));
 });
