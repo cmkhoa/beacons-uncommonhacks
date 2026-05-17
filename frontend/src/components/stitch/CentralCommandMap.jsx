@@ -47,7 +47,6 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [expanded, setExpanded] = useState(null);
   const [activeTransfers, setActiveTransfers] = useState([]);
   const [etaByTransferId, setEtaByTransferId] = useState({});
 
@@ -99,25 +98,6 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
     [hospitalsWithStatus]
   );
 
-  const readinessPct = useMemo(() => {
-    const allEntries = hospitalsWithStatus.flatMap((h) => h.inventory ?? []);
-    if (allEntries.length === 0) return 0;
-    const healthy = allEntries.filter(
-      (e) => e.status === 'ADEQUATE' || e.status === 'SURPLUS'
-    ).length;
-    return Math.round((healthy / allEntries.length) * 100);
-  }, [hospitalsWithStatus]);
-
-  const criticalShortItemNames = useMemo(() => {
-    const names = new Set();
-    for (const h of criticalHospitals) {
-      for (const e of getShortEntries(h)) {
-        names.add(itemMap.get(e.itemId)?.name ?? e.itemId);
-      }
-    }
-    return [...names];
-  }, [criticalHospitals, itemMap]);
-
   const getShortItemNames = (hospital) =>
     getShortEntries(hospital).map(
       (e) => itemMap.get(e.itemId)?.name ?? e.itemId
@@ -151,8 +131,6 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
     };
   };
 
-  const toggle = (card) => setExpanded((prev) => (prev === card ? null : card));
-
   const addTransfer = (suggestion) => {
     if (!suggestion) return;
     setActiveTransfers((prev) =>
@@ -177,73 +155,6 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
-        <div className="absolute top-4 left-4 z-10 flex gap-3 flex-wrap pointer-events-none">
-          {/* Regional Readiness card */}
-          <div
-            onClick={() => toggle('readiness')}
-            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
-            style={{ width: expanded === 'readiness' ? '220px' : '110px' }}
-          >
-            {expanded === 'readiness' ? (
-              <div className="p-5">
-                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-                  <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
-                  <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
-                </div>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-on-surface">{readinessPct}%</span>
-                </div>
-                <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: `${readinessPct}%` }}></div>
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 flex flex-col items-center">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Readiness</span>
-                <span className="text-2xl font-bold text-on-surface">{readinessPct}%</span>
-                <div className="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full" style={{ width: `${readinessPct}%` }}></div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Active Shortages card */}
-          <div
-            onClick={() => toggle('shortages')}
-            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
-            style={{ width: expanded === 'shortages' ? '220px' : '110px' }}
-          >
-            {expanded === 'shortages' ? (
-              <div className="p-5">
-                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-                  <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
-                  <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
-                </div>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-error">{criticalHospitals.length}</span>
-                  <span className="text-xs text-on-surface-variant mb-2 font-medium">
-                    Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {criticalShortItemNames.map((item) => (
-                    <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 flex flex-col items-center">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Shortages</span>
-                <span className="text-2xl font-bold text-error">{criticalHospitals.length}</span>
-                <span className="text-[9px] text-on-surface-variant mt-1">
-                  Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
         <div className="w-full h-full relative overflow-hidden">
           <MapViewer
             hospitals={hospitalsWithStatus}
@@ -256,18 +167,7 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
 
       {/* Right Sidebar: Mission Log */}
       <aside className="w-full lg:w-[380px] bg-surface border-l border-outline-variant h-full flex flex-col shrink-0 z-30 shadow-[-10px_0_25px_-10px_rgba(0,0,0,0.08)]">
-        <div className="p-6 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
-          <div>
-            <h3 className="text-lg font-bold text-on-surface">Mission Log</h3>
-            <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest mt-0.5">Real-time Intelligence</p>
-          </div>
-          <span className="bg-error-container text-on-error-container text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-error/10">
-            <span className="w-2 h-2 rounded-full bg-error animate-pulse"></span>
-            Live
-          </span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-surface-bright/50 custom-scrollbar">
           {loading && (
             <div className="text-sm text-on-surface-variant">Loading network…</div>
           )}
@@ -282,25 +182,25 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             const eta = etaByTransferId[transfer.id] ?? estimateETA(transfer.distance);
             const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
             return (
-              <div key={transfer.id} className="bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden" style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: `${color}55` }}>
+              <div key={transfer.id} className="bg-surface rounded-lg p-2.5 shadow-sm relative overflow-hidden" style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: `${color}55` }}>
                 <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }}></div>
-                <div className="flex justify-between items-start mb-2 pl-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-tight" style={{ color, background: `${color}15`, borderColor: `${color}40` }}>
-                    Transfer En Route
+                <div className="flex justify-between items-center pl-2">
+                  <span className="text-xs font-bold px-1.5 py-0.5 rounded border uppercase tracking-tight" style={{ color, background: `${color}15`, borderColor: `${color}40` }}>
+                    Transfer
                   </span>
-                  <span className="font-mono text-[11px] text-on-surface-variant font-medium">Now</span>
+                  <span className="font-mono text-xs text-on-surface-variant font-medium">Now</span>
                 </div>
-                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{transfer.itemName} Transfer</h4>
-                <p className="text-[13px] text-on-surface-variant pl-2">
+                <h4 className="font-bold text-sm leading-tight text-on-surface pl-2 mt-1">{transfer.itemName}</h4>
+                <p className="text-sm leading-tight text-on-surface-variant pl-2">
                   <strong>{transfer.fromHospitalName}</strong> → <strong>{transfer.toHospitalName}</strong>
                 </p>
-                <p className="pl-2 mt-2" style={{ fontSize: '16px', fontWeight: 'bold', color: '#38bdf8' }}>
-                  {transfer.quantity} {transfer.itemName} · {transfer.distance} mi · {eta} min
+                <p className="pl-2" style={{ fontSize: '12px', fontWeight: 'bold', color: '#38bdf8', lineHeight: 1.25 }}>
+                  {transfer.quantity} items, {transfer.distance} mi, {eta} min
                 </p>
-                <div className="pl-2 mt-3">
+                <div className="pl-2 mt-1">
                   <button
                     onClick={() => removeTransfer(transfer.id)}
-                    className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
+                    className="bg-white text-on-surface-variant border border-outline-variant text-xs font-bold px-2.5 py-1 rounded-md hover:bg-surface-container transition-colors"
                   >
                     Dismiss
                   </button>
@@ -316,28 +216,28 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             const alreadyActive = activeTransfers.some((t) => t.id === suggestion.id);
             const shortItems = getShortItemNames(hospital);
             return (
-              <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all relative overflow-hidden group">
+              <div key={hospital.id} className="bg-surface border border-error-container rounded-lg p-2.5 shadow-sm hover:shadow-md hover:border-error transition-all relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
-                <div className="flex justify-between items-start mb-3 pl-2">
-                  <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
+                <div className="flex justify-between items-center pl-2">
+                  <span className="bg-red-50 text-red-700 text-xs font-bold px-1.5 py-0.5 rounded border border-red-200 uppercase tracking-tight">Shortage</span>
                 </div>
-                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
-                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-1">Short on: {shortItems.join(', ')}.</p>
-                <p className="text-[12px] text-primary font-semibold pl-2">
-                  Beacon matched <strong>{suggestion.fromHospitalName}</strong> · {suggestion.distance} mi
+                <h4 className="font-bold text-sm leading-tight text-on-surface pl-2 mt-1">{hospital.name}</h4>
+                <p className="text-sm leading-tight text-on-surface-variant pl-2">Items: {shortItems.join(', ')}</p>
+                <p className="text-xs leading-tight text-primary font-semibold pl-2">
+                  Donor: <strong>{suggestion.fromHospitalName}</strong>, {suggestion.distance} mi
                 </p>
-                <p className="pl-2 mb-3" style={{ fontSize: '15px', fontWeight: 'bold', color: '#38bdf8' }}>
+                <p className="pl-2 mb-1" style={{ fontSize: '12px', fontWeight: 'bold', color: '#38bdf8', lineHeight: 1.25 }}>
                   ETA: ~{estimateETA(suggestion.distance)} min
                 </p>
                 {!alreadyActive ? (
                   <div className="pl-2 flex gap-2">
-                    <button onClick={() => addTransfer(suggestion)} className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+                    <button onClick={() => addTransfer(suggestion)} className="bg-primary text-white text-xs font-bold px-2.5 py-1 rounded-md hover:opacity-90 transition-opacity shadow-sm">
                       Execute Match
                     </button>
-                    <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
+                    <button className="bg-white text-on-surface-variant border border-outline-variant text-xs font-bold px-2.5 py-1 rounded-md hover:bg-surface-container transition-colors">Ignore</button>
                   </div>
                 ) : (
-                  <p className="pl-2 text-[11px] font-bold text-emerald-600">✓ Transfer dispatched</p>
+                  <p className="pl-2 text-xs font-bold text-emerald-600">Transfer dispatched</p>
                 )}
               </div>
             );
@@ -350,27 +250,27 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             const alreadyActive = activeTransfers.some((t) => t.id === suggestion.id);
             const shortItems = getShortItemNames(hospital);
             return (
-              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all relative overflow-hidden group">
+              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-lg p-2.5 shadow-sm hover:shadow-md hover:border-amber-500 transition-all relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
-                <div className="flex justify-between items-start mb-3 pl-2">
-                  <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
+                <div className="flex justify-between items-center pl-2">
+                  <span className="bg-yellow-50 text-yellow-700 text-xs font-bold px-1.5 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Shortage</span>
                 </div>
-                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
-                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-1">Running low on: {shortItems.join(', ')}.</p>
-                <p className="text-[12px] text-amber-600 font-semibold pl-2">
-                  Suggested donor: <strong>{suggestion.fromHospitalName}</strong> · {suggestion.distance} mi
+                <h4 className="font-bold text-sm leading-tight text-on-surface pl-2 mt-1">{hospital.name}</h4>
+                <p className="text-sm leading-tight text-on-surface-variant pl-2">Items: {shortItems.join(', ')}</p>
+                <p className="text-xs leading-tight text-amber-600 font-semibold pl-2">
+                  Donor: <strong>{suggestion.fromHospitalName}</strong>, {suggestion.distance} mi
                 </p>
-                <p className="pl-2 mb-3" style={{ fontSize: '15px', fontWeight: 'bold', color: '#38bdf8' }}>
+                <p className="pl-2 mb-1" style={{ fontSize: '12px', fontWeight: 'bold', color: '#38bdf8', lineHeight: 1.25 }}>
                   ETA: ~{estimateETA(suggestion.distance)} min
                 </p>
                 {!alreadyActive ? (
                   <div className="pl-2">
-                    <button onClick={() => addTransfer(suggestion)} className="bg-amber-500 text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-                      Pre-emptive Match
+                    <button onClick={() => addTransfer(suggestion)} className="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-md hover:opacity-90 transition-opacity shadow-sm">
+                      Match
                     </button>
                   </div>
                 ) : (
-                  <p className="pl-2 text-[11px] font-bold text-emerald-600">✓ Transfer dispatched</p>
+                  <p className="pl-2 text-xs font-bold text-emerald-600">Transfer dispatched</p>
                 )}
               </div>
             );

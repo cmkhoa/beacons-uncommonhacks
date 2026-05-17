@@ -80,13 +80,6 @@ export default function MapViewer({
     }
   }, [activeTransfers, hospitals]);
 
-  const criticalUnmatched = hospitals.filter(
-    (h) =>
-      h.status === 'CRITICAL_SHORTAGE' &&
-      !activeTransfers.find((t) => t.toHospitalId === h.id)
-  );
-  const hasCriticalAlert = criticalUnmatched.length > 0;
-
   const donorTransferMap = {};
   activeTransfers.forEach((t) => {
     if (!donorTransferMap[t.fromHospitalId]) donorTransferMap[t.fromHospitalId] = [];
@@ -175,7 +168,7 @@ export default function MapViewer({
   };
 
   return (
-    <div style={{ height: '100%', width: '100%', position: 'relative', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ height: '100%', width: '100%', position: 'relative' }}>
       <style>{`
         @keyframes donor-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6), 0 0 8px #3b82f6; }
@@ -186,16 +179,6 @@ export default function MapViewer({
           line-height: 32px; padding: 0; right: 4px; top: 4px;
         }
       `}</style>
-
-      {hasCriticalAlert && (
-        <div style={{ position: 'absolute', top: 0, right: '24px', zIndex: 20, background: 'rgba(127, 0, 0, 0.45)', color: '#fff', padding: '10px 24px', borderRadius: '0 0 10px 10px', borderBottom: '2px solid #ef4444', borderLeft: '1px solid #ef4444', borderRight: '1px solid #ef4444', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '480px', backdropFilter: 'blur(4px)' }}>
-          <span style={{ fontSize: '18px' }}>🚨</span>
-          <span style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.03em', lineHeight: 1.5 }}>
-            {criticalUnmatched.length} CRITICAL SHORTAGE{criticalUnmatched.length > 1 ? 'S' : ''} DETECTED:{' '}
-            {criticalUnmatched.map((h) => h.name).join(', ')}. See Mission Log.
-          </span>
-        </div>
-      )}
 
       <Map initialViewState={{ longitude: -87.6298, latitude: 41.8781, zoom: 11 }} mapStyle="mapbox://styles/mapbox/dark-v11" mapboxAccessToken={MAPBOX_TOKEN}>
         {activeTransfers.map((transfer) => {
