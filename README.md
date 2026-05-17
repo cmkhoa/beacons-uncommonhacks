@@ -1,61 +1,262 @@
 # Beacon
 
-**Automated medical supply management for hospital staff.**
-
-In a medical crisis, nurses and doctors do not have time to fill out complex forms or wait on hold to find supplies. Beacon simplifies this process by using voice AI and automated agents to track inventory and move supplies where they are needed most.
-
----
-
-## The Problem
-
-When a hospital runs out of critical gear, like masks or ventilators, staff have to spend time making phone calls to find replacements. Often, another hospital nearby has a surplus, but there is no fast way to see that or request it. Manual tracking is slow and takes staff away from patients.
-
----
-
-## How It Works
-
-### 1. Voice Interface for Staff
-Nurses interact with Beacon using voice commands powered by Eleven Labs. Instead of typing into a dashboard, a nurse can simply say, "We just used five ventilators" or "Our mask count is getting low."
-
-### 2. Intelligent Inventory Agent
-An automated agent processes these voice commands and updates the hospital's digital inventory in real time. The agent monitors stock levels against set safety thresholds.
-
-### 3. Automated Supply Requests
-If the agent sees that an item has dropped below its safe threshold, it automatically triggers a search for help. 
-
-The system:
-- Finds the nearest hospital with enough extra stock of that specific item.
-- Creates a request to move those supplies.
-- Notifies the dispatchers or staff at both locations.
-
-### 4. Smart Matching Algorithm
-The matching logic uses simple distance math and inventory checks to ensure supplies travel the shortest path possible. This happens instantly, without anyone needing to pick up a phone.
-
----
+Beacon is an emergency supply optimizer for hospitals. Nurses can log inventory changes from a focused form or an ElevenLabs voice assistant, while the visualization tools show hospital inventory, transfer routes, volunteer supply requests, and regional analytics.
 
 ## Tech Stack
 
-- **Voice AI**: Eleven Labs for the nurse interface.
-- **Database**: Firebase for real-time inventory tracking.
-- **Backend**: Node.js to run the inventory agent and matching logic.
-- **Frontend**: React and Tailwind for a clean, simple dashboard for dispatchers.
-- **Maps**: Mapbox to show supply routes and hospital locations.
+- Backend: Express, TypeScript, Firebase Admin SDK, Firestore
+- Frontend: React, Vite, Tailwind CSS
+- Maps: Mapbox via `react-map-gl`
+- Voice: ElevenLabs Conversational AI widget
+- Data: Firestore collections for hospitals, inventory, items, users, requests, and logs
 
----
+## Project Structure
 
-## The Demo
+```text
+backend/
+  server.ts                 Express app and API route registration
+  routes/                   HTTP endpoints
+  services/                 Firestore and business logic
+  models/                   Shared backend types
+  scripts/                  Firestore seed scripts
 
-1. **Voice Command**: A nurse tells the system that a hospital is low on a specific item.
-2. **Threshold Hit**: The inventory agent updates the count and realizes it is below the safety limit.
-3. **Auto-Match**: The system instantly finds a neighbor with a surplus and draws a route on the map.
-4. **Result**: A supply run is scheduled automatically before the staff even finishes their shift.
+frontend/
+  src/components/           App screens and shared UI
+  src/lib/                  API and session helpers
+  src/index.css             Global theme and font setup
 
----
+docs/
+  ELEVENLABS_SETUP.md       ElevenLabs tool and webhook setup
+```
 
-## Project Goal
+## Prerequisites
 
-The goal of Beacon is to take the paperwork and guesswork out of hospital logistics. By using voice and automation, we let medical staff focus on saving lives while the system handles the supplies.
+- Node.js and npm
+- Firebase project with Firestore in Native mode
+- Firebase Admin service account credentials
+- Mapbox token for the visualizer map
+- ElevenLabs Conversational AI agent for voice updates
+- `ngrok` if testing ElevenLabs webhooks locally
 
----
+## Environment Setup
 
-*Built for Uncommon Hacks.*
+Create backend and frontend env files:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Backend values:
+
+```bash
+PORT=5050
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+VOICE_WEBHOOK_SECRET=replace-with-a-random-secret
+```
+
+Frontend values:
+
+```bash
+VITE_API_BASE=http://localhost:5050
+VITE_MAPBOX_TOKEN=your-mapbox-token
+VITE_ELEVENLABS_AGENT_ID=your-elevenlabs-agent-id
+```
+
+The Firebase web app values in `frontend/.env` are only needed for frontend Firebase features. The main app data currently flows through the backend API.
+
+## Install Dependencies
+
+From the repo root:
+
+```bash
+npm --prefix backend install
+npm --prefix frontend install
+```
+
+## Seed Firestore
+
+Run the seed scripts from `backend/` after `backend/.env` is configured:
+
+```bash
+cd backend
+npx tsx scripts/seed-hospitals.ts
+npx tsx scripts/seed-users.ts
+```
+
+`seed-hospitals.ts` creates global items, five Chicago-area hospitals, and hospital inventory entries. `seed-users.ts` creates one nurse per seeded hospital.
+
+## Run Locally
+
+Start the backend API:
+
+```bash
+npm --prefix backend run dev
+```
+
+The API listens on:
+
+```text
+http://localhost:5050
+```
+
+Start the frontend:
+
+```bash
+npm --prefix frontend run dev
+```
+
+Open the Vite URL printed in the terminal, usually:
+
+```text
+http://localhost:5173
+```
+
+## ElevenLabs Local Webhooks
+
+Start an ngrok tunnel to the backend:
+
+```bash
+ngrok http 5050
+```
+
+Use the HTTPS ngrok URL for ElevenLabs tools:
+
+```text
+POST https://your-ngrok-domain/api/voice/webhooks/action
+POST https://your-ngrok-domain/api/voice/webhooks/get
+```
+
+Every ElevenLabs webhook tool must send:
+
+```text
+x-beacon-secret: <VOICE_WEBHOOK_SECRET>
+```
+
+Preferred voice update tool:
+
+```json
+{
+  "hospitalId": "{{hospitalId}}",
+  "nurseId": "{{nurseId}}",
+  "entryId": "inventory entry id from inventoryList",
+  "action": "used",
+  "quantity": 5
+}
+```
+
+Action behavior:
+
+- `used`: decreases `availableCount` only
+- `removed`: decreases both `count` and `availableCount`
+- `added`: increases both `count` and `availableCount`
+
+See `docs/ELEVENLABS_SETUP.md` for the full agent prompt, dynamic variables, and tool schemas.
+
+## Core Workflows
+
+### Nurse Inventory Updates
+
+1. Nurse signs in by selecting a hospital and nurse profile.
+2. Nurse selects an item category and item.
+3. Nurse chooses an action:
+   - `Used`: available stock decreases, total stock stays the same.
+   - `Removed`: available stock and total stock both decrease.
+   - `Added`: available stock and total stock both increase.
+4. Backend validates nurse access, updates Firestore, recalculates status, and writes an inventory log.
+5. If the item drops below threshold, the backend can create an automatic transfer request.
+
+### Voice Updates
+
+1. Frontend passes `hospitalId`, `nurseId`, and `inventoryList` to the ElevenLabs widget.
+2. ElevenLabs maps spoken item names to `entryId` from `inventoryList`.
+3. ElevenLabs calls `/api/voice/webhooks/action` for inventory changes or `/api/voice/webhooks/get` for stock questions.
+4. Backend applies the same inventory rules as the nurse form and logs the change to Firestore.
+
+### Transfer Visualization
+
+1. The visualization map loads hydrated hospitals and active transfer requests.
+2. Hospital pins reflect current inventory-derived status.
+3. Active transfers draw routes between hospitals using Mapbox Directions.
+4. The mission panel shows transfer and shortage suggestions in a compact list.
+
+### Volunteer Supply
+
+1. Requests are listed in a flat table.
+2. Admin or visualization users can assign donors and progress requests.
+3. Nurses can volunteer their own hospital for unassigned requests when appropriate.
+
+### Regional Analytics
+
+1. The analytics view loads summary, hospitals, inventory, and requests.
+2. It calculates network health, at-risk nodes, active transfers, and category health.
+3. The facility table lists area, score, and status for each hospital.
+
+## API Overview
+
+Common local endpoints:
+
+```text
+GET   /api/health
+GET   /api/hospitals
+GET   /api/hospitals?hydrate=true
+GET   /api/hospitals/:hospitalId
+PATCH /api/hospitals/:hospitalId/inventory/:entryId
+GET   /api/items
+GET   /api/users
+GET   /api/requests
+POST  /api/requests
+POST  /api/voice/webhooks/action
+POST  /api/voice/webhooks/get
+```
+
+Inventory PATCH supports:
+
+```json
+{
+  "change": -5,
+  "adjustmentType": "available",
+  "nurseId": "nurse-user-id",
+  "source": "MANUAL_FORM",
+  "message": "Used 5 isolation gowns"
+}
+```
+
+`adjustmentType` can be:
+
+- `available`: update `availableCount` only
+- `stock`: update both `count` and `availableCount`
+
+## Build and Checks
+
+Backend typecheck:
+
+```bash
+npm --prefix backend run build
+```
+
+Frontend production build:
+
+```bash
+npm --prefix frontend run build
+```
+
+Frontend lint:
+
+```bash
+npm --prefix frontend run lint
+```
+
+## Demo Flow
+
+1. Seed hospitals and users.
+2. Start backend and frontend.
+3. Sign in as a nurse.
+4. Submit a `used`, `removed`, or `added` inventory update.
+5. Open the visualization tool from the user menu.
+6. Review transfer routes, volunteer supply requests, inventory, and regional analytics.
+7. Optionally connect ElevenLabs through ngrok and test hands-free updates.
+
+Built for Uncommon Hacks.
