@@ -1,12 +1,19 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../config/firebase-config.js";
-import type { Hospital, InventoryEntry, TransferRequest } from "../models/index.js";
+import type {
+  Hospital,
+  InventoryEntry,
+  TransferRequest,
+} from "../models/index.js";
+import type { InventoryStatus } from "../models/inventoryEntry.js";
+import type { UrgencyLevel } from "../models/transferRequests.js";
 import { calculateDistance } from "../utils/distance.js";
 import { getAllHospitals } from "./hospitalService.js";
 import {
   createTransferRequest,
   getInventoryEntriesByItemId,
 } from "./inventoryService.js";
+import { getItemById } from "./itemService.js";
 
 const TRANSFER_REQUESTS = "transfer_requests";
 
@@ -75,38 +82,72 @@ export function findClosestDonor(
 // ── Auto-transfer orchestration ─────────────────────────────────────────
 
 /**
- * When an inventory entry drops to LOW or CRITICAL_SHORTAGE,
- * find a surplus donor and create a transfer request automatically.
+ * When an inventory entry drops to LOW or CRITICAL_SHORTAGE, run the
+ * distance-based matcher to pick the closest surplus donor and create a
+ * transfer request automatically.
  *
- * Returns the created TransferRequest, or null if no donor was found.
+ * Direction semantics (matches `models/transferRequests.ts`):
+ *   - `fromHospital*` = the hospital experiencing the shortage (requester)
+ *   - `toHospital*`   = the matched donor hospital (closest by distance)
+ *
+ * Returns the created TransferRequest. If no donor is found, the request
+ * is still created with empty `toHospital*` so dispatch (or the AI agent
+ * later) can assign one manually.
  */
+// Auto-generated transfers don't originate from a real staff member.
+const SYSTEM_STAFF_NAME = "System (auto-generated)";
+
+function urgencyFromStatus(status: InventoryStatus): UrgencyLevel {
+  switch (status) {
+    case "CRITICAL_SHORTAGE":
+      return "CRITICAL";
+    case "LOW":
+      return "HIGH";
+    default:
+      return "NORMAL";
+  }
+}
+
 export async function autoCreateTransfer(
   hospital: Hospital,
   itemId: string,
   quantityNeeded: number,
-  status: string
+  status: InventoryStatus
 ): Promise<TransferRequest | null> {
-  const [allHospitals, peerInventory] = await Promise.all([
+  const [allHospitals, peerInventory, item] = await Promise.all([
     getAllHospitals(),
     getInventoryEntriesByItemId(itemId),
+    getItemById(itemId),
   ]);
+
+  if (!item) return null;
 
   const match = findClosestDonor(hospital, allHospitals, peerInventory, itemId);
 
-  if (!match.donorHospital || !match.donorEntry) return null;
-
   const now = Timestamp.now();
   const trData: Omit<TransferRequest, "requestId"> = {
+    requestType: "INVENTORY_SHORTAGE",
+    urgencyLevel: urgencyFromStatus(status),
     itemId,
+    itemCategory: item.category,
+    itemName: item.name,
     quantity: quantityNeeded,
-    fromHospitalId: match.donorHospital.id!,
-    toHospitalId: hospital.id!,
+    fromHospitalId: hospital.id!,
+    fromHospitalName: hospital.name,
+    staffName: SYSTEM_STAFF_NAME,
     status: "PENDING",
-    distance: match.distance ?? undefined,
-    reason: `Auto-generated: item ${itemId} is ${status} at hospital ${hospital.id}`,
+    reason: `Auto-generated: ${item.name} is ${status} at ${hospital.name}`,
     createdAt: now,
     updatedAt: now,
   };
+
+  if (match.donorHospital) {
+    trData.toHospitalId = match.donorHospital.id!;
+    trData.toHospitalName = match.donorHospital.name;
+  }
+  if (match.distance !== null && Number.isFinite(match.distance)) {
+    trData.distance = match.distance;
+  }
 
   const requestId = await createTransferRequest(trData);
   return { requestId, ...trData };

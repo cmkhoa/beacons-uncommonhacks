@@ -1,84 +1,109 @@
-import React from 'react';
+import React, { useState } from 'react';
+import MapViewer from '../MapViewer';
+import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../../data/hospitalData';
+
+const ITEM_LABELS = { ppe: 'PPE', lifeSupport: 'Life Support', blood: 'Blood', medication: 'Medication', generalSupplies: 'General Supplies' };
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
+  const [expanded, setExpanded] = useState(null);
+  const [activeTransferRequest, setActiveTransferRequest] = useState(DUMMY_TRANSFER_REQUEST);
+  const toggle = (card) => setExpanded(prev => prev === card ? null : card);
+
+  const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
+  const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
+
+  const getShortItems = (hospital) =>
+    Object.entries(THRESHOLDS)
+      .filter(([key, threshold]) => hospital.inventory[key] < threshold)
+      .map(([key]) => ITEM_LABELS[key]);
+
+  const donorHospital = LOCAL_DUMMY_DATA.find(h => h.id === activeTransferRequest?.fromHospitalId);
+
   return (
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
         {/* Map Overlay Metrics */}
-        <div className="absolute top-6 left-6 right-6 z-10 flex gap-6 flex-wrap pointer-events-none">
-          <div className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl p-5 shadow-lg pointer-events-auto min-w-[220px] flex-1 max-w-[260px]">
-            <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-              <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
-              <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
-            </div>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold text-on-surface">84%</span>
-              <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
-                <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
-              </span>
-            </div>
-            <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
-              <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
-            </div>
+        <div className="absolute top-4 left-4 z-10 flex gap-3 flex-wrap pointer-events-none">
+          {/* Regional Readiness card */}
+          <div
+            onClick={() => toggle('readiness')}
+            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
+            style={{ width: expanded === 'readiness' ? '220px' : '110px' }}
+          >
+            {expanded === 'readiness' ? (
+              <div className="p-5">
+                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
+                  <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
+                  <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-on-surface">84%</span>
+                  <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
+                    <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
+                  </span>
+                </div>
+                <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
+                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex flex-col items-center">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Readiness</span>
+                <span className="text-2xl font-bold text-on-surface">84%</span>
+                <div className="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-primary-container h-full rounded-full" style={{ width: '84%' }}></div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl p-5 shadow-lg pointer-events-auto min-w-[220px] flex-1 max-w-[260px]">
-            <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-              <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
-              <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
-            </div>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold text-error">12</span>
-              <span className="text-xs text-on-surface-variant mb-2 font-medium">Critical Facilities</span>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">O- Neg</span>
-              <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Ventilators</span>
-            </div>
+          {/* Active Shortages card */}
+          <div
+            onClick={() => toggle('shortages')}
+            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
+            style={{ width: expanded === 'shortages' ? '220px' : '110px' }}
+          >
+            {expanded === 'shortages' ? (
+              <div className="p-5">
+                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
+                  <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
+                  <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-error">{criticalHospitals.length}</span>
+                  <span className="text-xs text-on-surface-variant mb-2 font-medium">
+                    Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {criticalHospitals.flatMap(h => getShortItems(h)).filter((v, i, a) => a.indexOf(v) === i).map(item => (
+                    <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex flex-col items-center">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Shortages</span>
+                <span className="text-2xl font-bold text-error">{criticalHospitals.length}</span>
+                <span className="text-[9px] text-on-surface-variant mt-1">
+                  Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Map Viewport */}
-        <div className="w-full h-full relative overflow-hidden bg-surface-variant">
-          <div 
-            className="w-full h-full bg-cover bg-center opacity-70 grayscale transition-opacity duration-700 hover:opacity-80" 
-            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB9f65gzqBbyfQ3UksjYZCCY1_nCoYm7ODrimp7k0a-R4gBpO9QmUd-NgGDeYS2tfXVeO_hPia4NdNoF-XXg6tR2kADbdvu5T1AqOkzjl2O6pOwdvQbCuSYQtZANvefHl--mTEUKB7P-KxtVgC_V3for3H78rc6_jkvYVRwoZ_O7vdkbTlbL4Q0E7JoRRWbNv1DozM79CJnSt5vK_2G_GnArgxIf9TdysxDXIdcyFSknbg6hmGNXdfGYU0yS86RQvqT18L62Rgwilzf')" }}
-          ></div>
-          
-          <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-transparent pointer-events-none"></div>
-
-          {/* Critical Pin */}
-          <button className="absolute top-[35%] left-[45%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-125 transition-all duration-300 z-20">
-            <div className="bg-error text-on-error rounded-full p-2.5 shadow-2xl border-2 border-surface animate-pulse ring-4 ring-error/20">
-              <span className="material-symbols-outlined text-[24px] fill-1">local_hospital</span>
-            </div>
-            <div className="mt-2 bg-surface/95 backdrop-blur-sm border border-outline-variant px-3 py-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-300 absolute top-full whitespace-nowrap z-30 transform translate-y-1">
-              <span className="text-xs font-bold text-on-surface block">Mercy General</span>
-              <p className="text-[10px] text-error font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-error rounded-full animate-ping"></span>
-                O- Blood Critical
-              </p>
-            </div>
-          </button>
-
-          {/* Warning Pin */}
-          <button className="absolute top-[55%] left-[30%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 transition-transform z-20">
-            <div className="bg-amber-500 text-white rounded-full p-2 shadow-lg border-2 border-surface ring-4 ring-amber-500/10">
-              <span className="material-symbols-outlined text-[20px] fill-1">local_hospital</span>
-            </div>
-          </button>
-
-          {/* Stable Pin */}
-          <button className="absolute top-[20%] left-[60%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 transition-transform z-20">
-            <div className="bg-emerald-600 text-white rounded-full p-2 shadow-lg border-2 border-surface ring-4 ring-emerald-500/10">
-              <span className="material-symbols-outlined text-[20px] fill-1">local_hospital</span>
-            </div>
-          </button>
+        <div className="w-full h-full relative overflow-hidden">
+          <MapViewer
+            activeTransferRequest={activeTransferRequest}
+            setActiveTransferRequest={setActiveTransferRequest}
+          />
         </div>
       </div>
 
-      {/* Right Sidebar: Alert Feed */}
+      {/* Right Sidebar: Mission Log */}
       <aside className="w-full lg:w-[380px] bg-surface border-l border-outline-variant h-full flex flex-col shrink-0 z-30 shadow-[-10px_0_25px_-10px_rgba(0,0,0,0.08)]">
         <div className="p-6 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
           <div>
@@ -90,31 +115,87 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             Live
           </span>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
-          <div className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all cursor-pointer relative overflow-hidden group">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
-            <div className="flex justify-between items-start mb-3 pl-2">
-              <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
-              <span className="font-mono text-[11px] text-on-surface-variant font-medium">02m ago</span>
-            </div>
-            <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">Mercy General Hospital</h4>
-            <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-4">O-Negative blood supply depleted. Requesting immediate transfer from regional hubs.</p>
-            <div className="pl-2 flex gap-2">
-              <button className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">Execute Match</button>
-              <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
-            </div>
-          </div>
 
-          <div className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden group">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
-            <div className="flex justify-between items-start mb-3 pl-2">
-              <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
-              <span className="font-mono text-[11px] text-on-surface-variant font-medium">12m ago</span>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
+
+          {/* Active transfer request */}
+          {activeTransferRequest && (
+            <div className="bg-surface border border-primary/30 rounded-xl p-4 shadow-sm relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+              <div className="flex justify-between items-start mb-3 pl-2">
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-tight">Transfer Active</span>
+                <span className="font-mono text-[11px] text-on-surface-variant font-medium">Now</span>
+              </div>
+              <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{activeTransferRequest.itemName} Transfer</h4>
+              <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
+                {activeTransferRequest.quantity}x {activeTransferRequest.itemName}s from <strong>{activeTransferRequest.fromHospitalName}</strong> → <strong>{activeTransferRequest.toHospitalName}</strong>
+              </p>
+              <p className="text-[11px] text-on-surface-variant pl-2 mt-1">{activeTransferRequest.distance} miles · Status: {activeTransferRequest.status}</p>
+              <div className="pl-2 mt-3">
+                <button
+                  onClick={() => setActiveTransferRequest(null)}
+                  className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
-            <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">St. Jude Medical Center</h4>
-            <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">Ventilator usage at 85% capacity. Pre-emptive sourcing recommended by autonomous agent.</p>
-          </div>
+          )}
+
+          {/* Critical shortage hospitals */}
+          {criticalHospitals.map(hospital => {
+            const shortItems = getShortItems(hospital);
+            const donor = LOCAL_DUMMY_DATA.find(h => h.status === 'DONOR');
+            return (
+              <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all cursor-pointer relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
+                </div>
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-3">
+                  Short on: {shortItems.join(', ')}. Nearest donor: <strong>{donor?.name}</strong>.
+                </p>
+                <div className="pl-2 flex gap-2">
+                  <button
+                    onClick={() => setActiveTransferRequest({
+                      id: `request_${hospital.id}`,
+                      itemName: shortItems[0],
+                      quantity: 3,
+                      fromHospitalId: donor?.id,
+                      fromHospitalName: donor?.name,
+                      toHospitalId: hospital.id,
+                      toHospitalName: hospital.name,
+                      status: 'PENDING',
+                      distance: 2.1,
+                    })}
+                    className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                  >
+                    Execute Match
+                  </button>
+                  <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Low hospitals */}
+          {lowHospitals.map(hospital => {
+            const shortItems = getShortItems(hospital);
+            return (
+              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
+                </div>
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
+                  Running low on: {shortItems.join(', ')}. Pre-emptive sourcing recommended.
+                </p>
+              </div>
+            );
+          })}
+
         </div>
       </aside>
     </div>
