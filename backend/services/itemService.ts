@@ -14,6 +14,21 @@ export async function getItemById(itemId: string): Promise<Item | null> {
   return { id: doc.id, ...(doc.data() as Omit<Item, "id">) };
 }
 
+/**
+ * Find a single global item by its exact display name.
+ * Returns null if no item with that name exists.
+ */
+export async function getItemByName(name: string): Promise<Item | null> {
+  const snap = await db
+    .collection(ITEMS)
+    .where("name", "==", name)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...(doc.data() as Omit<Item, "id">) };
+}
+
 export async function getAllItems(): Promise<Item[]> {
   const snap = await db.collection(ITEMS).get();
   return snap.docs.map((d) => ({
