@@ -1,42 +1,79 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MapViewer from '../MapViewer';
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
+  const [expanded, setExpanded] = useState(null);
+  const toggle = (card) => setExpanded(prev => prev === card ? null : card);
+
   return (
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
         {/* Map Overlay Metrics */}
-        <div className="absolute top-6 left-6 right-6 z-10 flex gap-6 flex-wrap pointer-events-none">
-          <div className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl p-5 shadow-lg pointer-events-auto min-w-[220px] flex-1 max-w-[260px]">
-            <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-              <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
-              <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
-            </div>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold text-on-surface">84%</span>
-              <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
-                <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
-              </span>
-            </div>
-            <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
-              <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
-            </div>
+        <div className="absolute top-4 left-4 z-10 flex gap-3 flex-wrap pointer-events-none">
+          {/* Regional Readiness card */}
+          <div
+            onClick={() => toggle('readiness')}
+            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
+            style={{ width: expanded === 'readiness' ? '220px' : '110px' }}
+          >
+            {expanded === 'readiness' ? (
+              <div className="p-5">
+                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
+                  <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
+                  <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-on-surface">84%</span>
+                  <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
+                    <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
+                  </span>
+                </div>
+                <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
+                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex flex-col items-center">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Readiness</span>
+                <span className="text-2xl font-bold text-on-surface">84%</span>
+                <div className="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
+                  <div className="bg-primary-container h-full rounded-full" style={{ width: '84%' }}></div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl p-5 shadow-lg pointer-events-auto min-w-[220px] flex-1 max-w-[260px]">
-            <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-              <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
-              <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
-            </div>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold text-error">12</span>
-              <span className="text-xs text-on-surface-variant mb-2 font-medium">Critical Facilities</span>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">O- Neg</span>
-              <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Ventilators</span>
-            </div>
+          {/* Active Shortages card */}
+          <div
+            onClick={() => toggle('shortages')}
+            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
+            style={{ width: expanded === 'shortages' ? '220px' : '110px' }}
+          >
+            {expanded === 'shortages' ? (
+              <div className="p-5">
+                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
+                  <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
+                  <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-error">1</span>
+                  <span className="text-xs text-on-surface-variant mb-2 font-medium">Critical Facility</span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Blood</span>
+                  <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Life Support</span>
+                  <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">PPE</span>
+                  <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Medication</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 flex flex-col items-center">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Shortages</span>
+                <span className="text-2xl font-bold text-error">1</span>
+                <span className="text-[9px] text-on-surface-variant mt-1">Critical Facility</span>
+              </div>
+            )}
           </div>
         </div>
 
