@@ -234,6 +234,22 @@ const SupplyMatchmakerRouting = ({ session, isEmbedded = false }) => {
           </button>
         );
       }
+      // Donor nurse can approve their hospital's matched requests
+      if (req.toHospitalId === nurseHospitalId && req.status === "PENDING") {
+        return (
+          <button
+            type="button"
+            onClick={() => approve(req)}
+            disabled={isBusy}
+            className={`${baseBtn} bg-primary text-white hover:opacity-90 shadow-sm`}
+          >
+            <span className="material-symbols-outlined text-[14px]">
+              check_circle
+            </span>
+            {isBusy ? "Approving…" : "Approve"}
+          </button>
+        );
+      }
       return readOnly("—");
     }
 

@@ -12,6 +12,7 @@ import { getAllHospitals } from "./hospitalService.js";
 import {
   createTransferRequest,
   getInventoryEntriesByItemId,
+  getInventoryForHospital,
 } from "./inventoryService.js";
 import { getItemById } from "./itemService.js";
 
@@ -196,3 +197,4 @@ export async function updateTransferRequest(
   await db.collection(TRANSFER_REQUESTS).doc(requestId).update(updateData);
   return getTransferRequestById(requestId);
 }
+
