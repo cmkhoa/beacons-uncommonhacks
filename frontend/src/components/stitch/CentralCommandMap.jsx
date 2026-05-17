@@ -1,29 +1,69 @@
 import React, { useState } from 'react';
 import MapViewer from '../MapViewer';
-import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../../data/hospitalData';
+import { LOCAL_DUMMY_DATA, THRESHOLDS, distanceMiles } from '../../data/hospitalData';
 
 const ITEM_LABELS = { ppe: 'PPE', lifeSupport: 'Life Support', blood: 'Blood', medication: 'Medication', generalSupplies: 'General Supplies' };
+const ROUTE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6'];
+
+const donors = LOCAL_DUMMY_DATA.filter(h => h.status === 'DONOR');
+const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
+const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
+
+const getShortItems = (hospital) =>
+  Object.entries(THRESHOLDS)
+    .filter(([key, threshold]) => hospital.inventory[key] < threshold)
+    .map(([key]) => ITEM_LABELS[key]);
+
+const nearestDonor = (hospital) =>
+  donors.reduce((best, donor) =>
+    distanceMiles(hospital.location, donor.location) < distanceMiles(hospital.location, best.location)
+      ? donor : best
+  );
+
+const buildSuggestion = (hospital) => {
+  const donor = nearestDonor(hospital);
+  const shortItems = getShortItems(hospital);
+  const distance = distanceMiles(hospital.location, donor.location);
+  return {
+    id: `request_${hospital.id}`,
+    itemName: shortItems[0],
+    quantity: 3,
+    fromHospitalId: donor.id,
+    fromHospitalName: donor.name,
+    toHospitalId: hospital.id,
+    toHospitalName: hospital.name,
+    status: 'PENDING',
+    distance: Math.round(distance * 10) / 10,
+  };
+};
+
+const estimateETA = (distanceMi) => Math.round((distanceMi / 25) * 60);
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
   const [expanded, setExpanded] = useState(null);
-  const [activeTransferRequest, setActiveTransferRequest] = useState(DUMMY_TRANSFER_REQUEST);
+  const [activeTransfers, setActiveTransfers] = useState([]);
+  const [etaByTransferId, setEtaByTransferId] = useState({});
   const toggle = (card) => setExpanded(prev => prev === card ? null : card);
 
-  const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
-  const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
+  const addTransfer = (suggestion) => {
+    setActiveTransfers(prev =>
+      prev.find(t => t.id === suggestion.id) ? prev : [...prev, suggestion]
+    );
+  };
 
-  const getShortItems = (hospital) =>
-    Object.entries(THRESHOLDS)
-      .filter(([key, threshold]) => hospital.inventory[key] < threshold)
-      .map(([key]) => ITEM_LABELS[key]);
+  const removeTransfer = (id) => {
+    setActiveTransfers(prev => prev.filter(t => t.id !== id));
+    setEtaByTransferId(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
 
-  const donorHospital = LOCAL_DUMMY_DATA.find(h => h.id === activeTransferRequest?.fromHospitalId);
+  const handleTransferRouted = (id, etaMins) => {
+    setEtaByTransferId(prev => ({ ...prev, [id]: etaMins }));
+  };
 
   return (
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
-        {/* Map Overlay Metrics */}
         <div className="absolute top-4 left-4 z-10 flex gap-3 flex-wrap pointer-events-none">
           {/* Regional Readiness card */}
           <div
@@ -94,11 +134,10 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
           </div>
         </div>
 
-        {/* Map Viewport */}
         <div className="w-full h-full relative overflow-hidden">
           <MapViewer
-            activeTransferRequest={activeTransferRequest}
-            setActiveTransferRequest={setActiveTransferRequest}
+            activeTransfers={activeTransfers}
+            onTransferRouted={handleTransferRouted}
           />
         </div>
       </div>
@@ -118,80 +157,99 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
 
-          {/* Active transfer request */}
-          {activeTransferRequest && (
-            <div className="bg-surface border border-primary/30 rounded-xl p-4 shadow-sm relative overflow-hidden">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
-              <div className="flex justify-between items-start mb-3 pl-2">
-                <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-tight">Transfer Active</span>
-                <span className="font-mono text-[11px] text-on-surface-variant font-medium">Now</span>
-              </div>
-              <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{activeTransferRequest.itemName} Transfer</h4>
-              <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
-                {activeTransferRequest.quantity}x {activeTransferRequest.itemName}s from <strong>{activeTransferRequest.fromHospitalName}</strong> → <strong>{activeTransferRequest.toHospitalName}</strong>
-              </p>
-              <p className="text-[11px] text-on-surface-variant pl-2 mt-1">{activeTransferRequest.distance} miles · Status: {activeTransferRequest.status}</p>
-              <div className="pl-2 mt-3">
-                <button
-                  onClick={() => setActiveTransferRequest(null)}
-                  className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Critical shortage hospitals */}
-          {criticalHospitals.map(hospital => {
-            const shortItems = getShortItems(hospital);
-            const donor = LOCAL_DUMMY_DATA.find(h => h.status === 'DONOR');
+          {/* Active transfers */}
+          {activeTransfers.map((transfer, i) => {
+            const eta = etaByTransferId[transfer.id] ?? estimateETA(transfer.distance);
+            const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
             return (
-              <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all cursor-pointer relative overflow-hidden group">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
-                <div className="flex justify-between items-start mb-3 pl-2">
-                  <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
+              <div key={transfer.id} className="bg-surface rounded-xl p-4 shadow-sm relative overflow-hidden" style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: `${color}55` }}>
+                <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }}></div>
+                <div className="flex justify-between items-start mb-2 pl-2">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-tight" style={{ color, background: `${color}15`, borderColor: `${color}40` }}>
+                    Transfer En Route
+                  </span>
+                  <span className="font-mono text-[11px] text-on-surface-variant font-medium">Now</span>
                 </div>
-                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
-                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-3">
-                  Short on: {shortItems.join(', ')}. Nearest donor: <strong>{donor?.name}</strong>.
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{transfer.itemName} Transfer</h4>
+                <p className="text-[13px] text-on-surface-variant pl-2">
+                  <strong>{transfer.fromHospitalName}</strong> → <strong>{transfer.toHospitalName}</strong>
                 </p>
-                <div className="pl-2 flex gap-2">
+                <p className="pl-2 mt-2" style={{ fontSize: '16px', fontWeight: 'bold', color: '#38bdf8' }}>
+                  {transfer.quantity} {transfer.itemName}s · {transfer.distance} mi · {eta} min
+                </p>
+                <div className="pl-2 mt-3">
                   <button
-                    onClick={() => setActiveTransferRequest({
-                      id: `request_${hospital.id}`,
-                      itemName: shortItems[0],
-                      quantity: 3,
-                      fromHospitalId: donor?.id,
-                      fromHospitalName: donor?.name,
-                      toHospitalId: hospital.id,
-                      toHospitalName: hospital.name,
-                      status: 'PENDING',
-                      distance: 2.1,
-                    })}
-                    className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                    onClick={() => removeTransfer(transfer.id)}
+                    className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
                   >
-                    Execute Match
+                    Dismiss
                   </button>
-                  <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
                 </div>
               </div>
             );
           })}
 
-          {/* Low hospitals */}
-          {lowHospitals.map(hospital => {
+          {/* Critical shortage suggestions */}
+          {criticalHospitals.map(hospital => {
+            const suggestion = buildSuggestion(hospital);
+            const alreadyActive = activeTransfers.some(t => t.id === suggestion.id);
             const shortItems = getShortItems(hospital);
             return (
-              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden group">
+              <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
+                </div>
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-1">Short on: {shortItems.join(', ')}.</p>
+                <p className="text-[12px] text-primary font-semibold pl-2">
+                  Beacon matched <strong>{suggestion.fromHospitalName}</strong> · {suggestion.distance} mi
+                </p>
+                <p className="pl-2 mb-3" style={{ fontSize: '15px', fontWeight: 'bold', color: '#38bdf8' }}>
+                  ETA: ~{estimateETA(suggestion.distance)} min
+                </p>
+                {!alreadyActive ? (
+                  <div className="pl-2 flex gap-2">
+                    <button onClick={() => addTransfer(suggestion)} className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+                      Execute Match
+                    </button>
+                    <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
+                  </div>
+                ) : (
+                  <p className="pl-2 text-[11px] font-bold text-emerald-600">✓ Transfer dispatched</p>
+                )}
+              </div>
+            );
+          })}
+
+          {/* LOW hospital suggestions */}
+          {lowHospitals.map(hospital => {
+            const suggestion = buildSuggestion(hospital);
+            const alreadyActive = activeTransfers.some(t => t.id === suggestion.id);
+            const shortItems = getShortItems(hospital);
+            return (
+              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
                 <div className="flex justify-between items-start mb-3 pl-2">
                   <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
                 </div>
                 <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
-                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
-                  Running low on: {shortItems.join(', ')}. Pre-emptive sourcing recommended.
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-1">Running low on: {shortItems.join(', ')}.</p>
+                <p className="text-[12px] text-amber-600 font-semibold pl-2">
+                  Suggested donor: <strong>{suggestion.fromHospitalName}</strong> · {suggestion.distance} mi
                 </p>
+                <p className="pl-2 mb-3" style={{ fontSize: '15px', fontWeight: 'bold', color: '#38bdf8' }}>
+                  ETA: ~{estimateETA(suggestion.distance)} min
+                </p>
+                {!alreadyActive ? (
+                  <div className="pl-2">
+                    <button onClick={() => addTransfer(suggestion)} className="bg-amber-500 text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+                      Pre-emptive Match
+                    </button>
+                  </div>
+                ) : (
+                  <p className="pl-2 text-[11px] font-bold text-emerald-600">✓ Transfer dispatched</p>
+                )}
               </div>
             );
           })}
