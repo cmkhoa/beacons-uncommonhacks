@@ -5,9 +5,7 @@ import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../../data
 const ITEM_LABELS = { ppe: 'PPE', lifeSupport: 'Life Support', blood: 'Blood', medication: 'Medication', generalSupplies: 'General Supplies' };
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
-  const [expanded, setExpanded] = useState(null);
   const [activeTransferRequest, setActiveTransferRequest] = useState(DUMMY_TRANSFER_REQUEST);
-  const toggle = (card) => setExpanded(prev => prev === card ? null : card);
 
   const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
   const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
@@ -23,74 +21,52 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
-        {/* Map Overlay Metrics */}
-        <div className="absolute top-4 left-4 z-30 flex flex-col sm:flex-row gap-3 max-w-[min(calc(100%-2rem),28rem)] pointer-events-none">
-          {/* Regional Readiness card */}
-          <div
-            onClick={() => toggle('readiness')}
-            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
-            style={{ width: expanded === 'readiness' ? '220px' : '110px' }}
-          >
-            {expanded === 'readiness' ? (
-              <div className="p-5">
-                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-                  <span className="material-symbols-outlined text-[20px] text-primary">health_and_safety</span>
-                  <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
-                </div>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-on-surface">84%</span>
-                  <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
-                    <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
-                  </span>
-                </div>
-                <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
-                </div>
+        {/* Map overlay: optional critical alert banner above the two metric cards */}
+        <div className="absolute top-4 left-4 right-4 z-30 pointer-events-none flex flex-col gap-3">
+          {criticalHospitals.length > 0 && activeTransferRequest && (
+            <div className="w-full pointer-events-auto bg-[rgba(127,0,0,0.92)] text-white border border-error rounded-xl shadow-lg backdrop-blur-md px-4 py-3 flex items-start gap-3">
+              <span className="text-lg leading-none mt-0.5 shrink-0">🚨</span>
+              <span className="text-[12px] font-bold leading-snug tracking-wide">
+                CRITICAL SHORTAGE DETECTED: <strong>{activeTransferRequest.toHospitalName}</strong> is below{' '}
+                <strong>{activeTransferRequest.itemName}</strong> threshold. Beacon matched{' '}
+                <strong>{activeTransferRequest.fromHospitalName}</strong> as the nearest donor.
+              </span>
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-[520px] pointer-events-auto">
+            <div className="bg-surface/95 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg p-4 min-w-0">
+              <div className="flex items-center gap-2 text-on-surface-variant mb-2">
+                <span className="material-symbols-outlined text-[20px] text-primary shrink-0">health_and_safety</span>
+                <span className="text-[11px] uppercase font-bold tracking-widest leading-tight">Regional Readiness</span>
               </div>
-            ) : (
-              <div className="p-3 flex flex-col items-center">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Readiness</span>
-                <span className="text-2xl font-bold text-on-surface">84%</span>
-                <div className="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full" style={{ width: '84%' }}></div>
-                </div>
+              <div className="flex items-end gap-2 flex-wrap">
+                <span className="text-3xl sm:text-4xl font-bold text-on-surface">84%</span>
+                <span className="text-xs text-emerald-600 mb-1 flex items-center font-bold">
+                  <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
+                </span>
               </div>
-            )}
-          </div>
+              <div className="w-full bg-surface-variant h-1.5 rounded-full mt-3 overflow-hidden">
+                <div className="bg-primary-container h-full rounded-full" style={{ width: '84%' }} />
+              </div>
+            </div>
 
-          {/* Active Shortages card */}
-          <div
-            onClick={() => toggle('shortages')}
-            className="bg-surface/90 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg pointer-events-auto cursor-pointer select-none transition-all duration-300 overflow-hidden"
-            style={{ width: expanded === 'shortages' ? '220px' : '110px' }}
-          >
-            {expanded === 'shortages' ? (
-              <div className="p-5">
-                <div className="flex items-center gap-2 text-on-surface-variant mb-1">
-                  <span className="material-symbols-outlined text-[20px] text-error">bloodtype</span>
-                  <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
-                </div>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-error">{criticalHospitals.length}</span>
-                  <span className="text-xs text-on-surface-variant mb-2 font-medium">
-                    Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {criticalHospitals.flatMap(h => getShortItems(h)).filter((v, i, a) => a.indexOf(v) === i).map(item => (
-                    <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
-                  ))}
-                </div>
+            <div className="bg-surface/95 backdrop-blur-md border border-outline-variant rounded-xl shadow-lg p-4 min-w-0">
+              <div className="flex items-center gap-2 text-on-surface-variant mb-2">
+                <span className="material-symbols-outlined text-[20px] text-error shrink-0">bloodtype</span>
+                <span className="text-[11px] uppercase font-bold tracking-widest leading-tight">Active Shortages</span>
               </div>
-            ) : (
-              <div className="p-3 flex flex-col items-center">
-                <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Shortages</span>
-                <span className="text-2xl font-bold text-error">{criticalHospitals.length}</span>
-                <span className="text-[9px] text-on-surface-variant mt-1">
+              <div className="flex items-end gap-2 flex-wrap">
+                <span className="text-3xl sm:text-4xl font-bold text-error">{criticalHospitals.length}</span>
+                <span className="text-xs text-on-surface-variant mb-1 font-medium">
                   Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
                 </span>
               </div>
-            )}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {criticalHospitals.flatMap((h) => getShortItems(h)).filter((v, i, a) => a.indexOf(v) === i).map((item) => (
+                  <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
