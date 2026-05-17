@@ -1,6 +1,4 @@
 import { Router, type Request, type Response } from "express";
-import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../config/firebase-config.js";
 import {
   getAllHospitals,
   getHospitalById,
@@ -11,7 +9,6 @@ import {
   getInventoryEntry,
   processInventoryUpdate,
 } from "../services/inventoryService.js";
-import type { TransferRequest } from "../models/index.js";
 
 const router = Router();
 
@@ -120,41 +117,6 @@ router.patch("/:hospitalId/inventory/:entryId", async (req: Request, res: Respon
     res.status(500).json({
       error: err instanceof Error ? err.message : "Failed to update inventory",
     });
-  }
-});
-
-// ── Transfer Requests ───────────────────────────────────────────────────
-
-/**
- * POST /api/hospitals/requests
- * Create a manual supply request.
- */
-router.post("/requests", async (req: Request, res: Response) => {
-  try {
-    const { toHospitalId, itemId, quantity, reason } = req.body;
-
-    const toHospitalDoc = await db.collection("hospitals").doc(toHospitalId).get();
-    if (!toHospitalDoc.exists) {
-      res.status(404).json({ error: "Destination hospital not found" });
-      return;
-    }
-
-    const requestData: Omit<TransferRequest, "requestId"> = {
-      itemId,
-      quantity,
-      toHospitalId,
-      fromHospitalId: "SYSTEM_RESERVE",
-      status: "PENDING",
-      reason,
-      createdAt: FieldValue.serverTimestamp() as any,
-      updatedAt: FieldValue.serverTimestamp() as any,
-    };
-
-    const docRef = await db.collection("transfer_requests").add(requestData);
-
-    res.json({ success: true, requestId: docRef.id });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create request" });
   }
 });
 

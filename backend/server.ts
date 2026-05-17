@@ -5,6 +5,7 @@ import analyticsRouter from "./routes/analytics.js";
 import healthRouter from "./routes/healthRoutes.js";
 import hospitalsRouter from "./routes/hospitals.js";
 import itemsRouter from "./routes/items.js";
+import requestsRouter from "./routes/requests.js";
 import voiceRouter from "./routes/voice.js";
 
 const app = express();
@@ -18,6 +19,7 @@ app.use("/api/hospitals", hospitalsRouter);
 app.use("/api/items", itemsRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/voice", voiceRouter);
+app.use("/api/requests", requestsRouter);
 
 app.listen(PORT, () => {
   console.log(`[Beacon] API listening on http://localhost:${PORT}`);
