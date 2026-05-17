@@ -47,6 +47,13 @@ function App() {
     setActiveView('default');
   };
 
+  const handleGoToTransferMap = () => {
+    setDispatcherTab('map');
+    if (session.role === 'nurse' || session.role === 'admin') {
+      setActiveView('visualization');
+    }
+  };
+
   if (!session) {
     return <RoleLogin onLogin={handleLogin} />;
   }
@@ -74,6 +81,7 @@ function App() {
         onLogout={handleLogout}
         onOpenVisualization={handleOpenVisualization}
         onOpenNursePanel={handleOpenNursePanel}
+        onGoToTransferMap={handleGoToTransferMap}
         isVisualizationOpen={activeView === 'visualization'}
       />
       <div className="flex flex-1 overflow-hidden">
