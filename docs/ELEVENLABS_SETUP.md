@@ -144,7 +144,7 @@ x-beacon-secret: <VOICE_WEBHOOK_SECRET from backend/.env>
 
 ### Tool: `update_inventory`
 
-Use this when the nurse says inventory changed.
+Use this when the nurse says inventory changed and the agent has already mapped the change to a signed delta.
 
 Webhook URL:
 
@@ -195,6 +195,66 @@ Expected response:
 ```json
 {
   "result": "Successfully updated N95 Respirators. The new count is 895."
+}
+```
+
+### Tool: `inventory_action`
+
+Use this when the nurse says an item was used, removed, or added.
+
+Webhook URL:
+
+```text
+POST {{NGROK_URL}}/api/voice/webhooks/action
+```
+
+Request body:
+
+```json
+{
+  "hospitalId": "{{hospitalId}}",
+  "nurseId": "{{nurseId}}",
+  "entryId": "inventory entry id from inventoryList",
+  "action": "used",
+  "quantity": 5
+}
+```
+
+Behavior:
+
+- `used`: decreases `availableCount` only.
+- `removed`: decreases both `count` and `availableCount`.
+- `added`: increases both `count` and `availableCount`.
+
+Parameter schema:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "hospitalId": {
+      "type": "string",
+      "description": "Current hospital id from dynamic variables."
+    },
+    "nurseId": {
+      "type": "string",
+      "description": "Current nurse id from dynamic variables."
+    },
+    "entryId": {
+      "type": "string",
+      "description": "Inventory entry id for the item being updated."
+    },
+    "action": {
+      "type": "string",
+      "enum": ["used", "removed", "added"],
+      "description": "a"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Positive quantity for the action."
+    }
+  },
+  "required": ["hospitalId", "nurseId", "entryId", "action", "quantity"]
 }
 ```
 
