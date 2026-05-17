@@ -83,45 +83,48 @@ router.get("/:hospitalId/inventory", async (req: Request, res: Response) => {
  * Update inventory. Accepts either absolute `count` or a `change` delta.
  * Body: { count?, change?, source?, message? }
  */
-router.patch("/:hospitalId/inventory/:entryId", async (req: Request, res: Response) => {
-  try {
-    const { hospitalId, entryId } = req.params;
-    const { count, change, source, message, nurseId } = req.body;
+router.patch(
+  "/:hospitalId/inventory/:entryId",
+  async (req: Request, res: Response) => {
+    try {
+      const { hospitalId, entryId } = req.params;
+      const { count, change, source, message, nurseId } = req.body;
 
-    // Resolve delta: use `change` directly, or compute from absolute `count`
-    let delta = change;
-    if (delta === undefined && count !== undefined) {
-      const entry = await getInventoryEntry(hospitalId, entryId);
-      if (!entry) {
-        res.status(404).json({ error: "Inventory entry not found" });
+      // Resolve delta: use `change` directly, or compute from absolute `count`
+      let delta = change;
+      if (delta === undefined && count !== undefined) {
+        const entry = await getInventoryEntry(hospitalId, entryId);
+        if (!entry) {
+          res.status(404).json({ error: "Inventory entry not found" });
+          return;
+        }
+        delta = count - entry.count;
+      }
+
+      if (delta === undefined) {
+        res.status(400).json({ error: "Either count or change is required" });
         return;
       }
-      delta = count - entry.count;
+
+      const resolvedSource = source ?? (nurseId ? "MANUAL_FORM" : "SYSTEM");
+
+      const result = await processInventoryUpdate({
+        hospitalId,
+        entryId,
+        change: delta,
+        nurseId,
+        source: resolvedSource,
+        message: message || "Manual inventory update",
+      });
+      res.json(result);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({
+        error:
+          err instanceof Error ? err.message : "Failed to update inventory",
+      });
     }
-
-    if (delta === undefined) {
-      res.status(400).json({ error: "Either count or change is required" });
-      return;
-    }
-
-    const resolvedSource =
-      source ?? (nurseId ? "MANUAL_FORM" : "SYSTEM");
-
-    const result = await processInventoryUpdate({
-      hospitalId,
-      entryId,
-      change: delta,
-      nurseId,
-      source: resolvedSource,
-      message: message || "Manual inventory update",
-    });
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      error: err instanceof Error ? err.message : "Failed to update inventory",
-    });
   }
-});
+);
 
 export default router;
