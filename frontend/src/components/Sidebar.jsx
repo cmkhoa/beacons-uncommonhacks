@@ -4,6 +4,7 @@ const DISPATCHER_TABS = [
   { id: 'map', label: 'Transfer Map', icon: 'map' },
   { id: 'inventory', label: 'Hospital Inventory', icon: 'inventory_2' },
   { id: 'matchmaker', label: 'Supply Matchmaker', icon: 'hub' },
+  { id: 'readiness', label: 'Regional Readiness', icon: 'health_and_safety' },
 ];
 
 const Sidebar = ({ role, session, dispatcherTab, onDispatcherTabChange }) => {

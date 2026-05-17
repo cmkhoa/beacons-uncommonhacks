@@ -1,63 +1,176 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import MapViewer from '../MapViewer';
-import { LOCAL_DUMMY_DATA, THRESHOLDS, distanceMiles } from '../../data/hospitalData';
+import { distanceMiles } from '../../data/hospitalData';
+import { apiGet } from '../../lib/api';
 
-const ITEM_LABELS = { ppe: 'PPE', lifeSupport: 'Life Support', blood: 'Blood', medication: 'Medication', generalSupplies: 'General Supplies' };
 const ROUTE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6'];
 
-const donors = LOCAL_DUMMY_DATA.filter(h => h.status === 'DONOR');
-const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
-const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
-
-const getShortItems = (hospital) =>
-  Object.entries(THRESHOLDS)
-    .filter(([key, threshold]) => hospital.inventory[key] < threshold)
-    .map(([key]) => ITEM_LABELS[key]);
-
-const nearestDonor = (hospital) =>
-  donors.reduce((best, donor) =>
-    distanceMiles(hospital.location, donor.location) < distanceMiles(hospital.location, best.location)
-      ? donor : best
-  );
-
-const buildSuggestion = (hospital) => {
-  const donor = nearestDonor(hospital);
-  const shortItems = getShortItems(hospital);
-  const distance = distanceMiles(hospital.location, donor.location);
-  return {
-    id: `request_${hospital.id}`,
-    itemName: shortItems[0],
-    quantity: 3,
-    fromHospitalId: donor.id,
-    fromHospitalName: donor.name,
-    toHospitalId: hospital.id,
-    toHospitalName: hospital.name,
-    status: 'PENDING',
-    distance: Math.round(distance * 10) / 10,
-  };
+// Derive an overall hospital status from its inventory entries
+const deriveHospitalStatus = (entries) => {
+  if (!entries || entries.length === 0) return 'ADEQUATE';
+  if (entries.some((e) => e.status === 'CRITICAL_SHORTAGE')) return 'CRITICAL_SHORTAGE';
+  if (entries.some((e) => e.status === 'LOW')) return 'LOW';
+  if (entries.some((e) => e.status === 'SURPLUS')) return 'DONOR';
+  return 'ADEQUATE';
 };
+
+const getShortEntries = (hospital) =>
+  (hospital.inventory ?? []).filter(
+    (e) => e.status === 'CRITICAL_SHORTAGE' || e.status === 'LOW'
+  );
 
 const estimateETA = (distanceMi) => Math.round((distanceMi / 25) * 60);
 
+const findDonorForItem = (hospital, itemId, donors) => {
+  if (!hospital?.location) return null;
+  const withInventoryMatch = donors
+    .filter((d) => d.id !== hospital.id && d.location)
+    .filter((d) =>
+      (d.inventory ?? []).some(
+        (e) => e.itemId === itemId && (e.status === 'SURPLUS' || e.status === 'ADEQUATE')
+      )
+    )
+    .map((d) => ({ d, dist: distanceMiles(hospital.location, d.location) }))
+    .sort((a, b) => a.dist - b.dist);
+  if (withInventoryMatch.length > 0) return withInventoryMatch[0].d;
+
+  const anyDonor = donors
+    .filter((d) => d.id !== hospital.id && d.location)
+    .map((d) => ({ d, dist: distanceMiles(hospital.location, d.location) }))
+    .sort((a, b) => a.dist - b.dist);
+  return anyDonor[0]?.d ?? null;
+};
+
 const CentralCommandMap = ({ isEmbedded = false }) => {
+  const [hospitals, setHospitals] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [expanded, setExpanded] = useState(null);
   const [activeTransfers, setActiveTransfers] = useState([]);
   const [etaByTransferId, setEtaByTransferId] = useState({});
-  const toggle = (card) => setExpanded(prev => prev === card ? null : card);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [hData, iData] = await Promise.all([
+          apiGet('/api/hospitals?hydrate=true'),
+          apiGet('/api/items'),
+        ]);
+        if (cancelled) return;
+        setHospitals(hData.hospitals ?? []);
+        setItems(iData.items ?? []);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const itemMap = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  const hospitalsWithStatus = useMemo(
+    () =>
+      hospitals.map((h) => ({
+        ...h,
+        status: deriveHospitalStatus(h.inventory),
+      })),
+    [hospitals]
+  );
+
+  const donors = useMemo(
+    () => hospitalsWithStatus.filter((h) => h.status === 'DONOR'),
+    [hospitalsWithStatus]
+  );
+  const criticalHospitals = useMemo(
+    () => hospitalsWithStatus.filter((h) => h.status === 'CRITICAL_SHORTAGE'),
+    [hospitalsWithStatus]
+  );
+  const lowHospitals = useMemo(
+    () => hospitalsWithStatus.filter((h) => h.status === 'LOW'),
+    [hospitalsWithStatus]
+  );
+
+  const readinessPct = useMemo(() => {
+    const allEntries = hospitalsWithStatus.flatMap((h) => h.inventory ?? []);
+    if (allEntries.length === 0) return 0;
+    const healthy = allEntries.filter(
+      (e) => e.status === 'ADEQUATE' || e.status === 'SURPLUS'
+    ).length;
+    return Math.round((healthy / allEntries.length) * 100);
+  }, [hospitalsWithStatus]);
+
+  const criticalShortItemNames = useMemo(() => {
+    const names = new Set();
+    for (const h of criticalHospitals) {
+      for (const e of getShortEntries(h)) {
+        names.add(itemMap.get(e.itemId)?.name ?? e.itemId);
+      }
+    }
+    return [...names];
+  }, [criticalHospitals, itemMap]);
+
+  const getShortItemNames = (hospital) =>
+    getShortEntries(hospital).map(
+      (e) => itemMap.get(e.itemId)?.name ?? e.itemId
+    );
+
+  const buildSuggestion = (hospital) => {
+    const shortEntries = getShortEntries(hospital);
+    const firstShort = shortEntries[0];
+    if (!firstShort) return null;
+    const donor = findDonorForItem(hospital, firstShort.itemId, donors);
+    if (!donor || !hospital.location || !donor.location) return null;
+    const itemName = itemMap.get(firstShort.itemId)?.name ?? firstShort.itemId;
+    const distance = distanceMiles(hospital.location, donor.location);
+    const needed = Math.max(
+      1,
+      Math.ceil(
+        (firstShort.threshold ?? 1) - (firstShort.availableCount ?? 0)
+      ) || 1
+    );
+    return {
+      id: `request_${hospital.id}_${firstShort.id}`,
+      itemId: firstShort.itemId,
+      itemName,
+      quantity: needed,
+      fromHospitalId: donor.id,
+      fromHospitalName: donor.name,
+      toHospitalId: hospital.id,
+      toHospitalName: hospital.name,
+      status: 'PENDING',
+      distance: Math.round(distance * 10) / 10,
+    };
+  };
+
+  const toggle = (card) => setExpanded((prev) => (prev === card ? null : card));
 
   const addTransfer = (suggestion) => {
-    setActiveTransfers(prev =>
-      prev.find(t => t.id === suggestion.id) ? prev : [...prev, suggestion]
+    if (!suggestion) return;
+    setActiveTransfers((prev) =>
+      prev.find((t) => t.id === suggestion.id) ? prev : [...prev, suggestion]
     );
   };
 
   const removeTransfer = (id) => {
-    setActiveTransfers(prev => prev.filter(t => t.id !== id));
-    setEtaByTransferId(prev => { const next = { ...prev }; delete next[id]; return next; });
+    setActiveTransfers((prev) => prev.filter((t) => t.id !== id));
+    setEtaByTransferId((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const handleTransferRouted = (id, etaMins) => {
-    setEtaByTransferId(prev => ({ ...prev, [id]: etaMins }));
+    setEtaByTransferId((prev) => ({ ...prev, [id]: etaMins }));
   };
 
   return (
@@ -78,21 +191,18 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
                   <span className="text-[11px] uppercase font-bold tracking-widest">Regional Readiness</span>
                 </div>
                 <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-on-surface">84%</span>
-                  <span className="text-xs text-emerald-600 mb-2 flex items-center font-bold">
-                    <span className="material-symbols-outlined text-[16px]">arrow_upward</span> 2%
-                  </span>
+                  <span className="text-4xl font-bold text-on-surface">{readinessPct}%</span>
                 </div>
                 <div className="w-full bg-surface-variant h-1.5 rounded-full mt-4 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: '84%' }}></div>
+                  <div className="bg-primary-container h-full rounded-full transition-all duration-1000" style={{ width: `${readinessPct}%` }}></div>
                 </div>
               </div>
             ) : (
               <div className="p-3 flex flex-col items-center">
                 <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Readiness</span>
-                <span className="text-2xl font-bold text-on-surface">84%</span>
+                <span className="text-2xl font-bold text-on-surface">{readinessPct}%</span>
                 <div className="w-full bg-surface-variant h-1 rounded-full mt-2 overflow-hidden">
-                  <div className="bg-primary-container h-full rounded-full" style={{ width: '84%' }}></div>
+                  <div className="bg-primary-container h-full rounded-full" style={{ width: `${readinessPct}%` }}></div>
                 </div>
               </div>
             )}
@@ -117,7 +227,7 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
                   </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {criticalHospitals.flatMap(h => getShortItems(h)).filter((v, i, a) => a.indexOf(v) === i).map(item => (
+                  {criticalShortItemNames.map((item) => (
                     <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
                   ))}
                 </div>
@@ -136,6 +246,8 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
 
         <div className="w-full h-full relative overflow-hidden">
           <MapViewer
+            hospitals={hospitalsWithStatus}
+            itemMap={itemMap}
             activeTransfers={activeTransfers}
             onTransferRouted={handleTransferRouted}
           />
@@ -156,6 +268,14 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
+          {loading && (
+            <div className="text-sm text-on-surface-variant">Loading network…</div>
+          )}
+          {error && !loading && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              Failed to load: {error}
+            </div>
+          )}
 
           {/* Active transfers */}
           {activeTransfers.map((transfer, i) => {
@@ -175,7 +295,7 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
                   <strong>{transfer.fromHospitalName}</strong> → <strong>{transfer.toHospitalName}</strong>
                 </p>
                 <p className="pl-2 mt-2" style={{ fontSize: '16px', fontWeight: 'bold', color: '#38bdf8' }}>
-                  {transfer.quantity} {transfer.itemName}s · {transfer.distance} mi · {eta} min
+                  {transfer.quantity} {transfer.itemName} · {transfer.distance} mi · {eta} min
                 </p>
                 <div className="pl-2 mt-3">
                   <button
@@ -190,10 +310,11 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
           })}
 
           {/* Critical shortage suggestions */}
-          {criticalHospitals.map(hospital => {
+          {criticalHospitals.map((hospital) => {
             const suggestion = buildSuggestion(hospital);
-            const alreadyActive = activeTransfers.some(t => t.id === suggestion.id);
-            const shortItems = getShortItems(hospital);
+            if (!suggestion) return null;
+            const alreadyActive = activeTransfers.some((t) => t.id === suggestion.id);
+            const shortItems = getShortItemNames(hospital);
             return (
               <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
@@ -223,10 +344,11 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
           })}
 
           {/* LOW hospital suggestions */}
-          {lowHospitals.map(hospital => {
+          {lowHospitals.map((hospital) => {
             const suggestion = buildSuggestion(hospital);
-            const alreadyActive = activeTransfers.some(t => t.id === suggestion.id);
-            const shortItems = getShortItems(hospital);
+            if (!suggestion) return null;
+            const alreadyActive = activeTransfers.some((t) => t.id === suggestion.id);
+            const shortItems = getShortItemNames(hospital);
             return (
               <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
@@ -254,6 +376,11 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             );
           })}
 
+          {!loading && !error && criticalHospitals.length === 0 && lowHospitals.length === 0 && activeTransfers.length === 0 && (
+            <div className="text-sm text-on-surface-variant bg-surface border border-outline-variant rounded-xl p-4">
+              All hospitals are within healthy thresholds. No actions required.
+            </div>
+          )}
         </div>
       </aside>
     </div>

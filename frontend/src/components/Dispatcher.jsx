@@ -1,15 +1,18 @@
-import React from 'react';
-import CentralCommandMap from './stitch/CentralCommandMap';
-import HospitalInventoryDashboard from './stitch/HospitalInventoryDashboard';
-import SupplyMatchmakerRouting from './stitch/SupplyMatchmakerRouting';
+import React from "react";
+import CentralCommandMap from "./stitch/CentralCommandMap";
+import HospitalInventoryDashboard from "./stitch/HospitalInventoryDashboard";
+import SupplyMatchmakerRouting from "./stitch/SupplyMatchmakerRouting";
+import RegionalReadinessOverview from "./stitch/RegionalReadinessOverview";
 
 const Dispatcher = ({ tab, session }) => {
   switch (tab) {
-    case 'inventory':
+    case "inventory":
       return <HospitalInventoryDashboard session={session} isEmbedded />;
-    case 'matchmaker':
-      return <SupplyMatchmakerRouting isEmbedded />;
-    case 'map':
+    case "matchmaker":
+      return <SupplyMatchmakerRouting session={session} isEmbedded />;
+    case "readiness":
+      return <RegionalReadinessOverview isEmbedded />;
+    case "map":
     default:
       return <CentralCommandMap isEmbedded />;
   }
