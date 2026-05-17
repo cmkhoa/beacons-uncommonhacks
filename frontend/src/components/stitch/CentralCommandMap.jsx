@@ -1,4 +1,5 @@
 import React from 'react';
+import MapViewer from '../MapViewer';
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
   return (
@@ -40,41 +41,8 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
         </div>
 
         {/* Map Viewport */}
-        <div className="w-full h-full relative overflow-hidden bg-surface-variant">
-          <div 
-            className="w-full h-full bg-cover bg-center opacity-70 grayscale transition-opacity duration-700 hover:opacity-80" 
-            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB9f65gzqBbyfQ3UksjYZCCY1_nCoYm7ODrimp7k0a-R4gBpO9QmUd-NgGDeYS2tfXVeO_hPia4NdNoF-XXg6tR2kADbdvu5T1AqOkzjl2O6pOwdvQbCuSYQtZANvefHl--mTEUKB7P-KxtVgC_V3for3H78rc6_jkvYVRwoZ_O7vdkbTlbL4Q0E7JoRRWbNv1DozM79CJnSt5vK_2G_GnArgxIf9TdysxDXIdcyFSknbg6hmGNXdfGYU0yS86RQvqT18L62Rgwilzf')" }}
-          ></div>
-          
-          <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-transparent pointer-events-none"></div>
-
-          {/* Critical Pin */}
-          <button className="absolute top-[35%] left-[45%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-125 transition-all duration-300 z-20">
-            <div className="bg-error text-on-error rounded-full p-2.5 shadow-2xl border-2 border-surface animate-pulse ring-4 ring-error/20">
-              <span className="material-symbols-outlined text-[24px] fill-1">local_hospital</span>
-            </div>
-            <div className="mt-2 bg-surface/95 backdrop-blur-sm border border-outline-variant px-3 py-2 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-300 absolute top-full whitespace-nowrap z-30 transform translate-y-1">
-              <span className="text-xs font-bold text-on-surface block">Mercy General</span>
-              <p className="text-[10px] text-error font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-error rounded-full animate-ping"></span>
-                O- Blood Critical
-              </p>
-            </div>
-          </button>
-
-          {/* Warning Pin */}
-          <button className="absolute top-[55%] left-[30%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 transition-transform z-20">
-            <div className="bg-amber-500 text-white rounded-full p-2 shadow-lg border-2 border-surface ring-4 ring-amber-500/10">
-              <span className="material-symbols-outlined text-[20px] fill-1">local_hospital</span>
-            </div>
-          </button>
-
-          {/* Stable Pin */}
-          <button className="absolute top-[20%] left-[60%] transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 transition-transform z-20">
-            <div className="bg-emerald-600 text-white rounded-full p-2 shadow-lg border-2 border-surface ring-4 ring-emerald-500/10">
-              <span className="material-symbols-outlined text-[20px] fill-1">local_hospital</span>
-            </div>
-          </button>
+        <div className="w-full h-full relative overflow-hidden">
+          <MapViewer />
         </div>
       </div>
 
