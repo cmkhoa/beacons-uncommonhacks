@@ -184,7 +184,7 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
         `/api/hospitals/${entry.hospitalId}/inventory/${entry.id}`,
         {
           change,
-          adjustmentType: invAction === 'used' ? 'available' : 'stock',
+          adjustmentType: 'stock',
           nurseId: session.userId,
           source: 'MANUAL_FORM',
           message,

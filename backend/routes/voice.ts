@@ -77,7 +77,7 @@ function actionToUpdate(action: "used" | "removed" | "added", quantity: number) 
     return { change: amount, adjustmentType: "stock" as const };
   }
   if (action === "used") {
-    return { change: -amount, adjustmentType: "available" as const };
+    return { change: -amount, adjustmentType: "stock" as const };
   }
   return { change: -amount, adjustmentType: "stock" as const };
 }
@@ -137,7 +137,7 @@ async function updateSingleInventoryItem(
 
   const item = await getItemById(result.itemId);
   const itemLabel = item ? item.name : "the item";
-  return `Updated ${itemLabel}. New available count is ${result.newAvailableCount}.`;
+  return `Updated ${itemLabel}. New on-hand count is ${result.newCount}.`;
 }
 
 async function handleInventoryUpdate(params: Record<string, unknown>): Promise<string> {
@@ -162,7 +162,7 @@ async function handleInventoryUpdate(params: Record<string, unknown>): Promise<s
           nurseId,
           itemName,
           change: -Math.abs(quantities[index]),
-          adjustmentType: "available",
+          adjustmentType: "stock",
         })
       )
     );
