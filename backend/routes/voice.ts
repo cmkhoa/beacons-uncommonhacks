@@ -62,6 +62,26 @@ function parseQuantityList(value: unknown): number[] {
   return [];
 }
 
+function normalizeInventoryAction(value: unknown): "used" | "removed" | "added" | null {
+  if (typeof value !== "string") return null;
+  const action = value.trim().toLowerCase();
+  if (action === "used" || action === "removed" || action === "added") {
+    return action;
+  }
+  return null;
+}
+
+function actionToUpdate(action: "used" | "removed" | "added", quantity: number) {
+  const amount = Math.abs(quantity);
+  if (action === "added") {
+    return { change: amount, adjustmentType: "stock" as const };
+  }
+  if (action === "used") {
+    return { change: -amount, adjustmentType: "available" as const };
+  }
+  return { change: -amount, adjustmentType: "stock" as const };
+}
+
 async function resolveEntryIdByItemName(
   hospitalId: string,
   itemName: string
@@ -94,6 +114,8 @@ async function updateSingleInventoryItem(
   const itemName = firstString(params.itemName, params.item_name, params.item);
   const rawChange = params.change ?? params.quantity ?? params.item_quantity;
   const change = Number(rawChange);
+  const adjustmentType =
+    params.adjustmentType === "available" ? "available" : "stock";
 
   if (!hospitalId) throw new Error("hospitalId is required");
   if (!Number.isFinite(change)) throw new Error("change is required");
@@ -107,6 +129,7 @@ async function updateSingleInventoryItem(
     hospitalId,
     entryId,
     change,
+    adjustmentType,
     nurseId,
     source: nurseId ? "VOICE_COMMAND" : "SYSTEM",
     message: `Voice update: ${change > 0 ? "Added" : "Removed"} ${Math.abs(change)} items.`,
@@ -114,7 +137,7 @@ async function updateSingleInventoryItem(
 
   const item = await getItemById(result.itemId);
   const itemLabel = item ? item.name : "the item";
-  return `Updated ${itemLabel}. New count is ${result.newCount}.`;
+  return `Updated ${itemLabel}. New available count is ${result.newAvailableCount}.`;
 }
 
 async function handleInventoryUpdate(params: Record<string, unknown>): Promise<string> {
@@ -139,6 +162,7 @@ async function handleInventoryUpdate(params: Record<string, unknown>): Promise<s
           nurseId,
           itemName,
           change: -Math.abs(quantities[index]),
+          adjustmentType: "available",
         })
       )
     );
@@ -147,6 +171,24 @@ async function handleInventoryUpdate(params: Record<string, unknown>): Promise<s
   }
 
   return updateSingleInventoryItem(params);
+}
+
+async function handleInventoryAction(params: Record<string, unknown>): Promise<string> {
+  const action = normalizeInventoryAction(params.action);
+  const quantity = Number(params.quantity ?? params.item_quantity);
+
+  if (!action) throw new Error('action must be "used", "removed", or "added"');
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error("quantity must be a positive number");
+  }
+
+  const { change, adjustmentType } = actionToUpdate(action, quantity);
+
+  return updateSingleInventoryItem({
+    ...params,
+    change,
+    adjustmentType,
+  });
 }
 
 async function handleInventoryGet(params: Record<string, unknown>): Promise<string> {
@@ -184,6 +226,21 @@ router.post("/webhooks/update", verifySecret, async (req: Request, res: Response
     res.json({ result: await handleInventoryUpdate(params) });
   } catch (error: any) {
     console.error("[Voice Update Webhook Error]", error);
+    res.status(200).json({ result: `Sorry, I encountered an error: ${error.message}` });
+  }
+});
+
+/**
+ * POST /api/voice/webhooks/action
+ * Handles explicit used/removed/added inventory actions.
+ */
+router.post("/webhooks/action", verifySecret, async (req: Request, res: Response) => {
+  try {
+    const params = (req.body.parameters ?? req.body) as Record<string, unknown>;
+    console.log("[Voice] Action webhook called", params);
+    res.json({ result: await handleInventoryAction(params) });
+  } catch (error: any) {
+    console.error("[Voice Action Webhook Error]", error);
     res.status(200).json({ result: `Sorry, I encountered an error: ${error.message}` });
   }
 });
