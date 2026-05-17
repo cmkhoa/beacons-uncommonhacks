@@ -24,7 +24,7 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
       {/* Map Canvas */}
       <div className="flex-1 relative bg-surface-container-low h-full flex flex-col min-h-0">
         {/* Map Overlay Metrics */}
-        <div className="absolute top-4 left-4 z-10 flex gap-3 flex-wrap pointer-events-none">
+        <div className="absolute top-4 left-4 z-30 flex flex-col sm:flex-row gap-3 max-w-[min(calc(100%-2rem),28rem)] pointer-events-none">
           {/* Regional Readiness card */}
           <div
             onClick={() => toggle('readiness')}

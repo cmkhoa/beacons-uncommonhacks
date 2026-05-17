@@ -158,11 +158,29 @@ export default function MapViewer({ activeTransferRequest: propRequest, setActiv
           50% { box-shadow: 0 0 0 10px rgba(59,130,246,0), 0 0 20px #3b82f6; }
         }
       `}</style>
-      {/* Critical Alert Banner */}
+      {/* Critical Alert Banner — bottom strip; keeps top metric cards clear */}
       {hasCriticalAlert && activeTransferRequest && (
-        <div style={{ position: 'absolute', top: 0, right: '24px', zIndex: 20, background: 'rgba(127, 0, 0, 0.45)', color: '#fff', padding: '10px 24px', borderRadius: '0 0 10px 10px', borderBottom: '2px solid #ef4444', borderLeft: '1px solid #ef4444', borderRight: '1px solid #ef4444', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '480px', backdropFilter: 'blur(4px)' }}>
-          <span style={{ fontSize: '18px' }}>🚨</span>
-          <span style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.03em', lineHeight: 1.5 }}>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            left: '16px',
+            right: '16px',
+            zIndex: 20,
+            background: 'rgba(127, 0, 0, 0.88)',
+            color: '#fff',
+            padding: '12px 16px',
+            borderRadius: '10px',
+            border: '1px solid #ef4444',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+          }}
+        >
+          <span style={{ fontSize: '18px', flexShrink: 0, marginTop: '2px' }}>🚨</span>
+          <span style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.03em', lineHeight: 1.5, flex: 1 }}>
             CRITICAL SHORTAGE DETECTED: <strong>{activeTransferRequest.toHospitalName}</strong> is below{' '}
             <strong>{activeTransferRequest.itemName}</strong> threshold. Beacon matched{' '}
             <strong>{activeTransferRequest.fromHospitalName}</strong> as the nearest donor.
