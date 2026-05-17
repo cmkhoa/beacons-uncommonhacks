@@ -28,9 +28,9 @@ interface SeedHospital extends Omit<Hospital, "id" | "createdAt" | "updatedAt" |
 const GLOBAL_ITEMS: Omit<Item, "itemId" | "createdAt">[] = [
   { name: "N95 Respirators", unit: "masks", category: "PPE" },
   { name: "Isolation Gowns", unit: "gowns", category: "PPE" },
-  { name: "Negative-Pressure Pods", unit: "units", category: "Isolation" },
-  { name: "Ventilators", unit: "units", category: "Life Support" },
-  { name: "Oseltamivir (Tamiflu) Doses", unit: "doses", category: "Antivirals" },
+  { name: "Negative-Pressure Pods", unit: "units", category: "GENERAL_SUPPLIES" },
+  { name: "Ventilators", unit: "units", category: "LIFE_SUPPORT" },
+  { name: "Oseltamivir (Tamiflu) Doses", unit: "doses", category: "MEDICATION" },
 ];
 
 const hospitals: SeedHospital[] = [

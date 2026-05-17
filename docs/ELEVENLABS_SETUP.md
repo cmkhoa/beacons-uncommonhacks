@@ -10,7 +10,7 @@ The browser starts an ElevenLabs conversation from the nurse view. ElevenLabs re
 Nurse browser
   -> ElevenLabs Conversational AI agent
   -> ngrok public URL
-  -> backend /api/voice/webhook
+  -> backend /api/voice/webhooks/update or /api/voice/webhooks/get
   -> inventoryService
   -> Firestore inventory_logs + hospital inventory
 ```
@@ -66,10 +66,11 @@ Copy the HTTPS forwarding URL, for example:
 https://abc123.ngrok-free.app
 ```
 
-The ElevenLabs webhook URL will be:
+The ElevenLabs webhook URLs will be:
 
 ```text
-https://abc123.ngrok-free.app/api/voice/webhook
+https://abc123.ngrok-free.app/api/voice/webhooks/update
+https://abc123.ngrok-free.app/api/voice/webhooks/get
 ```
 
 Every time ngrok restarts, update the ElevenLabs tool webhook URL unless you are using a reserved ngrok domain.
@@ -93,13 +94,11 @@ The frontend should provide these dynamic variables when starting the session:
 {
   "hospitalId": "current hospital id",
   "nurseId": "current nurse user id",
-  "nurseName": "current nurse name",
-  "hospitalName": "current hospital name",
   "inventoryList": "human-readable list of items and entry IDs"
 }
 ```
 
-The important fields are `hospitalId`, `nurseId`, and `inventoryList`. The agent must use `entryId` values from `inventoryList` when calling inventory tools.
+The important tool fields are `hospitalId`, `nurseId`, and `inventoryList`. The agent must use `entryId` values from `inventoryList` when calling inventory tools.
 
 ## System Prompt
 
@@ -112,11 +111,9 @@ You help nurses update inventory and answer stock questions for one hospital onl
 
 Current nurse:
 - nurseId: {{nurseId}}
-- nurseName: {{nurseName}}
 
 Current hospital:
 - hospitalId: {{hospitalId}}
-- hospitalName: {{hospitalName}}
 
 Available inventory items:
 {{inventoryList}}
@@ -137,11 +134,7 @@ Do not discuss implementation details, Firestore, APIs, ngrok, or tool schemas w
 
 ## Tools
 
-Configure these tools in ElevenLabs as webhook/client tools depending on the ElevenLabs UI available to you. For this project, webhook tools should call:
-
-```text
-POST {{NGROK_URL}}/api/voice/webhook
-```
+Configure these tools in ElevenLabs as webhook/client tools depending on the ElevenLabs UI available to you.
 
 Add this header to every webhook tool:
 
@@ -153,17 +146,20 @@ x-beacon-secret: <VOICE_WEBHOOK_SECRET from backend/.env>
 
 Use this when the nurse says inventory changed.
 
+Webhook URL:
+
+```text
+POST {{NGROK_URL}}/api/voice/webhooks/update
+```
+
 Request body:
 
 ```json
 {
-  "tool_name": "update_inventory",
-  "parameters": {
-    "hospitalId": "{{hospitalId}}",
-    "nurseId": "{{nurseId}}",
-    "entryId": "inventory entry id from inventoryList",
-    "change": -5
-  }
+  "hospitalId": "{{hospitalId}}",
+  "nurseId": "{{nurseId}}",
+  "entryId": "inventory entry id from inventoryList",
+  "change": -5
 }
 ```
 
@@ -206,15 +202,18 @@ Expected response:
 
 Use this when the nurse asks how much stock is available for an item.
 
+Webhook URL:
+
+```text
+POST {{NGROK_URL}}/api/voice/webhooks/get
+```
+
 Request body:
 
 ```json
 {
-  "tool_name": "get_inventory",
-  "parameters": {
-    "hospitalId": "{{hospitalId}}",
-    "entryId": "inventory entry id from inventoryList"
-  }
+  "hospitalId": "{{hospitalId}}",
+  "entryId": "inventory entry id from inventoryList"
 }
 ```
 
@@ -279,32 +278,26 @@ Expected tool behavior:
 After starting backend and ngrok, test the webhook manually:
 
 ```bash
-curl -X POST "https://abc123.ngrok-free.app/api/voice/webhook" \
+curl -X POST "https://abc123.ngrok-free.app/api/voice/webhooks/get" \
   -H "Content-Type: application/json" \
   -H "x-beacon-secret: replace-with-a-random-secret" \
   -d '{
-    "tool_name": "get_inventory",
-    "parameters": {
-      "hospitalId": "YOUR_HOSPITAL_ID",
-      "entryId": "YOUR_ENTRY_ID"
-    }
+    "hospitalId": "YOUR_HOSPITAL_ID",
+    "entryId": "YOUR_ENTRY_ID"
   }'
 ```
 
 For an update test:
 
 ```bash
-curl -X POST "https://abc123.ngrok-free.app/api/voice/webhook" \
+curl -X POST "https://abc123.ngrok-free.app/api/voice/webhooks/update" \
   -H "Content-Type: application/json" \
   -H "x-beacon-secret: replace-with-a-random-secret" \
   -d '{
-    "tool_name": "update_inventory",
-    "parameters": {
-      "hospitalId": "YOUR_HOSPITAL_ID",
-      "nurseId": "YOUR_NURSE_ID",
-      "entryId": "YOUR_ENTRY_ID",
-      "change": -1
-    }
+    "hospitalId": "YOUR_HOSPITAL_ID",
+    "nurseId": "YOUR_NURSE_ID",
+    "entryId": "YOUR_ENTRY_ID",
+    "change": -1
   }'
 ```
 
@@ -321,7 +314,7 @@ Check:
 - Backend is running on port `5050`
 - ngrok is forwarding to `5050`
 - Tool URL uses HTTPS
-- Tool URL ends with `/api/voice/webhook`
+- Tool URL ends with `/api/voice/webhooks/update` or `/api/voice/webhooks/get`
 
 ### Agent updates the wrong item
 
