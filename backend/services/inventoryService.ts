@@ -14,7 +14,7 @@ import {
 } from "./userService.js";
 import { Timestamp } from "firebase-admin/firestore";
 import { getHospitalById } from "./hospitalService.js";
-import { autoCreateTransfer } from "./transferService.js";
+import { autoCreateTransfer, hasActiveRequestForItem } from "./transferService.js";
 import { getInventoryStatus } from "../utils/status.js";
 
 const HOSPITALS = "hospitals";
@@ -109,18 +109,8 @@ export async function updateInventoryEntry(
 export async function getInventoryEntriesByItemId(
   itemId: string
 ): Promise<InventoryEntry[]> {
-  const snap = await db
-    .collectionGroup(INVENTORY_SUB)
-    .where("itemId", "==", itemId)
-    .get();
-  return snap.docs.map((d) => {
-    const hospitalId = d.ref.parent.parent!.id;
-    return {
-      id: d.id,
-      hospitalId,
-      ...(d.data() as Omit<InventoryEntry, "id" | "hospitalId">),
-    };
-  });
+  const allEntries = await getAllInventoryEntries();
+  return allEntries.filter((e) => e.itemId === itemId);
 }
 
 /**
@@ -291,9 +281,11 @@ export async function processInventoryUpdate(
     message: input.message,
   });
 
-  // 3. Auto-transfer if shortage
+  // 3. Auto-transfer if shortage (with dedup check)
   let transferCreated = false;
   if (newStatus === "LOW" || newStatus === "CRITICAL_SHORTAGE") {
+    const alreadyRequested = await hasActiveRequestForItem(hospitalId, entry.itemId);
+    if (!alreadyRequested) {
       const quantityNeeded = Math.max(entry.threshold - newAvailableCount, 1);
       const transferRequest = await autoCreateTransfer(
         hospital,
@@ -302,6 +294,7 @@ export async function processInventoryUpdate(
         newStatus
       );
       transferCreated = transferRequest !== null;
+    }
   }
 
   return {

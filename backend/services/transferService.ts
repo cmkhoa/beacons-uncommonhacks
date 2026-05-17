@@ -198,3 +198,67 @@ export async function updateTransferRequest(
   return getTransferRequestById(requestId);
 }
 
+// ── Deduplication ───────────────────────────────────────────────────────
+
+/**
+ * Check whether an active (non-COMPLETED, non-CANCELLED) transfer request
+ * already exists for a given hospital + item pair.
+ *
+ * Uses the existing getActiveTransferRequests() query (single-field filter)
+ * and filters in memory to avoid requiring a Firestore composite index.
+ */
+export async function hasActiveRequestForItem(
+  hospitalId: string,
+  itemId: string
+): Promise<boolean> {
+  const active = await getActiveTransferRequests();
+  return active.some(
+    (r) => r.fromHospitalId === hospitalId && r.itemId === itemId
+  );
+}
+
+// ── Startup shortage scan ───────────────────────────────────────────────
+
+/**
+ * Scan all hospitals for inventory entries that are currently LOW or
+ * CRITICAL_SHORTAGE and create transfer requests for any that don't
+ * already have an active request. Intended to run once on server boot.
+ */
+export async function scanAndCreateShortageRequests(): Promise<number> {
+  const allHospitals = await getAllHospitals();
+  let created = 0;
+
+  for (const hospital of allHospitals) {
+    if (!hospital.id) continue;
+
+    const inventory = await getInventoryForHospital(hospital.id);
+
+    for (const entry of inventory) {
+      if (entry.status !== "LOW" && entry.status !== "CRITICAL_SHORTAGE") {
+        continue;
+      }
+
+      const alreadyRequested = await hasActiveRequestForItem(
+        hospital.id,
+        entry.itemId
+      );
+      if (alreadyRequested) continue;
+
+      const quantityNeeded = Math.max(entry.threshold - entry.availableCount, 1);
+      const result = await autoCreateTransfer(
+        hospital,
+        entry.itemId,
+        quantityNeeded,
+        entry.status
+      );
+      if (result) {
+        console.log(
+          `[Scan] Created request: ${result.itemName} for ${hospital.name}`
+        );
+        created++;
+      }
+    }
+  }
+
+  return created;
+}

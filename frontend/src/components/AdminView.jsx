@@ -847,10 +847,6 @@ const AdminView = () => {
                   </span>
                   Active Transfer Requests
                 </h3>
-                <p className="text-xs text-on-surface-variant mt-1">
-                  From <span className="font-mono">/api/requests</span> — assign a
-                  donor when needed, then approve or complete.
-                </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
