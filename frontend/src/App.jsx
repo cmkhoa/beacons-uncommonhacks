@@ -47,13 +47,20 @@ function App() {
     setActiveView('default');
   };
 
+  const handleGoToTransferMap = () => {
+    setDispatcherTab('map');
+    if (session.role === 'nurse' || session.role === 'admin') {
+      setActiveView('visualization');
+    }
+  };
+
   if (!session) {
     return <RoleLogin onLogin={handleLogin} />;
   }
 
   const renderView = () => {
     if (activeView === 'visualization') {
-      return <Dispatcher tab={dispatcherTab} />;
+      return <Dispatcher tab={dispatcherTab} session={session} />;
     }
 
     switch (session.role) {
@@ -63,7 +70,7 @@ function App() {
         return <AdminView />;
       case 'dispatcher':
       default:
-        return <Dispatcher tab={dispatcherTab} />;
+        return <Dispatcher tab={dispatcherTab} session={session} />;
     }
   };
 
@@ -74,6 +81,7 @@ function App() {
         onLogout={handleLogout}
         onOpenVisualization={handleOpenVisualization}
         onOpenNursePanel={handleOpenNursePanel}
+        onGoToTransferMap={handleGoToTransferMap}
         isVisualizationOpen={activeView === 'visualization'}
       />
       <div className="flex flex-1 overflow-hidden">
