@@ -46,55 +46,17 @@ export function VoiceAssistant({
   const isReady = Boolean(AGENT_ID && session?.hospitalId && session?.userId);
 
   return (
-    <section className="bg-white border border-outline-variant rounded-2xl p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">mic</span>
-            Voice Assistant
-          </h3>
-          <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
-            Use Beacon to log supply changes hands-free. The assistant knows
-            your hospital, nurse ID, and current inventory entry IDs.
-          </p>
+    <div className="w-full">
+      {isReady ? (
+        <elevenlabs-convai
+          agent-id={AGENT_ID}
+          dynamic-variables={dynamicVariables}
+        />
+      ) : (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Missing ElevenLabs agent ID or nurse session context.
         </div>
-      </div>
-
-      <div className="mt-6 rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
-        {isReady ? (
-          <div className="space-y-3">
-            <elevenlabs-convai
-              agent-id={AGENT_ID}
-              dynamic-variables={dynamicVariables}
-            />
-            <p className="text-xs text-on-surface-variant">
-              Context: hospital ID {session.hospitalId}
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Missing ElevenLabs agent ID or nurse session context.
-          </div>
-        )}
-      </div>
-
-      <div className="mt-5 space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-          Try saying
-        </p>
-        {[
-          'We used five ventilators.',
-          'Remove 20 N95 masks.',
-          'How many isolation gowns do we have?',
-        ].map((phrase) => (
-          <div
-            key={phrase}
-            className="rounded-lg border border-outline-variant bg-white px-3 py-2 text-sm text-on-surface"
-          >
-            "{phrase}"
-          </div>
-        ))}
-      </div>
-    </section>
+      )}
+    </div>
   );
 }

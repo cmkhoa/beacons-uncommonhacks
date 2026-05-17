@@ -88,7 +88,7 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const { hospitalId, entryId } = req.params;
-      const { count, change, source, message, nurseId } = req.body;
+      const { count, change, source, message, nurseId, adjustmentType } = req.body;
 
       // Resolve delta: use `change` directly, or compute from absolute `count`
       let delta = change;
@@ -112,6 +112,7 @@ router.patch(
         hospitalId,
         entryId,
         change: delta,
+        adjustmentType,
         nurseId,
         source: resolvedSource,
         message: message || "Manual inventory update",

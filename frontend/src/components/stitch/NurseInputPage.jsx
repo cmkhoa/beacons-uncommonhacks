@@ -184,6 +184,7 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
         `/api/hospitals/${entry.hospitalId}/inventory/${entry.id}`,
         {
           change,
+          adjustmentType: invAction === 'used' ? 'available' : 'stock',
           nurseId: session.userId,
           source: 'MANUAL_FORM',
           message,
@@ -303,9 +304,9 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
       )}
 
       <main className="flex-1 overflow-y-auto p-6 md:p-10">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* ── LEFT: form ───────────────────────────────────────────── */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* ── Form ─────────────────────────────────────────────────── */}
+          <div className="space-y-6">
             {/* Section 1: Request Type */}
             <section className="bg-white border border-outline-variant rounded-2xl p-6 shadow-sm">
               <h3 className="text-base font-bold text-on-surface mb-4 flex items-center gap-2">
@@ -623,15 +624,12 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
             )}
           </div>
 
-          {/* ── RIGHT: voice assistant ──────────────────────────────── */}
-          <div className="lg:col-span-1 space-y-6">
-            <VoiceAssistant
-              session={session}
-              hospital={hospital}
-              inventoryEntries={allInventoryEntries}
-              itemMap={itemMap}
-            />
-          </div>
+          <VoiceAssistant
+            session={session}
+            hospital={hospital}
+            inventoryEntries={allInventoryEntries}
+            itemMap={itemMap}
+          />
         </div>
       </main>
     </div>

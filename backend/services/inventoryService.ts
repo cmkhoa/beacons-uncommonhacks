@@ -165,10 +165,17 @@ export type InventoryUpdateSource =
   | "DEMO_BUTTON"
   | "SYSTEM";
 
+export type InventoryAdjustmentType = "available" | "stock";
+
 export interface ProcessInventoryUpdateInput {
   hospitalId: string;
   entryId: string;
   change: number;
+  /**
+   * "available" updates availableCount only, e.g. supplies used at bedside.
+   * "stock" updates both count and availableCount, e.g. removed or added stock.
+   */
+  adjustmentType?: InventoryAdjustmentType;
   /** Nurse user id; omitted for system-attributed changes. */
   nurseId?: string;
   source?: InventoryUpdateSource;
@@ -244,14 +251,27 @@ export async function processInventoryUpdate(
   if (!entry) throw new Error(`Inventory entry not found: ${entryId} @ ${hospitalId}`);
 
   // 1. Apply delta
+  const adjustmentType: InventoryAdjustmentType =
+    input.adjustmentType ?? "stock";
   const previousCount = entry.count;
-  const newCount = Math.max(previousCount + change, 0);
-  const previousAvailableCount = Math.max(entry.count - entry.inUseCount, 0);
-  const newAvailableCount = Math.max(newCount - entry.inUseCount, 0);
+  const previousAvailableCount = Math.max(
+    entry.availableCount ?? entry.count - entry.inUseCount,
+    0
+  );
+  const newCount =
+    adjustmentType === "available"
+      ? previousCount
+      : Math.max(previousCount + change, 0);
+  const newAvailableCount = Math.min(
+    Math.max(previousAvailableCount + change, 0),
+    newCount
+  );
+  const newInUseCount = Math.max(newCount - newAvailableCount, 0);
   const newStatus = getInventoryStatus(newAvailableCount, entry.threshold);
 
   await updateInventoryEntry(hospitalId, entry.id!, {
     count: newCount,
+    inUseCount: newInUseCount,
     availableCount: newAvailableCount,
     status: newStatus,
     lastUpdated: now,
