@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Map, Marker, Popup, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../data/hospitalData';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
@@ -13,38 +14,14 @@ const getStatusColor = (status) => {
   }
 };
 
-// Thresholds: below these values = shortage
-const THRESHOLDS = { ppe: 20, lifeSupport: 5, blood: 10, medication: 30, generalSupplies: 50 };
-
-const LOCAL_DUMMY_DATA = [
-  // CRITICAL: short on ppe, lifeSupport, blood, medication — generalSupplies is fine
-  { id: "hospital_uic", name: "UIC Medical Center", status: "CRITICAL_SHORTAGE", location: { latitude: 41.8708, longitude: -87.6710 }, inventory: { ppe: 5, lifeSupport: 2, blood: 3, medication: 8, generalSupplies: 60 } },
-  // ADEQUATE: all above thresholds
-  { id: "hospital_northwestern", name: "Northwestern Memorial", status: "ADEQUATE", location: { latitude: 41.8950, longitude: -87.6210 }, inventory: { ppe: 45, lifeSupport: 18, blood: 32, medication: 95, generalSupplies: 120 } },
-  // DONOR: well-stocked across the board
-  { id: "hospital_rush", name: "Rush University Medical Center", status: "DONOR", location: { latitude: 41.8744, longitude: -87.6690 }, inventory: { ppe: 80, lifeSupport: 30, blood: 65, medication: 200, generalSupplies: 300 } },
-  // LOW: short on lifeSupport, blood, medication, generalSupplies — ppe is fine
-  { id: "hospital_sinai", name: "Mount Sinai Hospital", status: "LOW", location: { latitude: 41.8610, longitude: -87.6946 }, inventory: { ppe: 25, lifeSupport: 3, blood: 7, medication: 25, generalSupplies: 20 } },
-];
-
-const DUMMY_TRANSFER_REQUEST = {
-  id: "request_123",
-  itemName: "Ventilator",
-  quantity: 3,
-  fromHospitalId: "hospital_rush",
-  fromHospitalName: "Rush University Medical Center",
-  toHospitalId: "hospital_uic",
-  toHospitalName: "UIC Medical Center",
-  status: "PENDING",
-  distance: 2.1
-};
-
-export default function MapViewer() {
+export default function MapViewer({ activeTransferRequest: propRequest, setActiveTransferRequest: propSetRequest }) {
   const [hospitals, setHospitals] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [activeTransferRequest, setActiveTransferRequest] = useState(DUMMY_TRANSFER_REQUEST);
+  const [internalRequest, setInternalRequest] = useState(DUMMY_TRANSFER_REQUEST);
+  const activeTransferRequest = propRequest !== undefined ? propRequest : internalRequest;
+  const setActiveTransferRequest = propSetRequest ?? setInternalRequest;
 
   const [routeOrigin, setRouteOrigin] = useState(null);
   const [routeDest, setRouteDest] = useState(null);
@@ -84,18 +61,22 @@ export default function MapViewer() {
     hospitals.some(h => h.status === 'CRITICAL_SHORTAGE')
   );
 
-  const shortItems = routeDest?.inventory
-    ? [
-        routeDest.inventory.ppe < THRESHOLDS.ppe && 'PPE',
-        routeDest.inventory.lifeSupport < THRESHOLDS.lifeSupport && 'Life Support',
-        routeDest.inventory.blood < THRESHOLDS.blood && 'Blood',
-        routeDest.inventory.medication < THRESHOLDS.medication && 'Medication',
-        routeDest.inventory.generalSupplies < THRESHOLDS.generalSupplies && 'General Supplies',
-      ].filter(Boolean)
-    : [];
-  const transferLabel = shortItems.length > 0
-    ? `Transferring ${shortItems.join(', ')} → ${etaMins} min`
-    : `ETA ${etaMins} min`;
+  const transferLabel = activeTransferRequest
+    ? `${activeTransferRequest.quantity} ${activeTransferRequest.itemName}s → ${etaMins} min`
+    : (() => {
+        const shortItems = routeDest?.inventory
+          ? [
+              routeDest.inventory.ppe < THRESHOLDS.ppe && 'PPE',
+              routeDest.inventory.lifeSupport < THRESHOLDS.lifeSupport && 'Life Support',
+              routeDest.inventory.blood < THRESHOLDS.blood && 'Blood',
+              routeDest.inventory.medication < THRESHOLDS.medication && 'Medication',
+              routeDest.inventory.generalSupplies < THRESHOLDS.generalSupplies && 'General Supplies',
+            ].filter(Boolean)
+          : [];
+        return shortItems.length > 0
+          ? `Transferring ${shortItems.join(', ')} → ${etaMins} min`
+          : `ETA ${etaMins} min`;
+      })();
 
   // Maps transfer request itemName → inventory key
   const ITEM_KEY_MAP = {
@@ -179,7 +160,7 @@ export default function MapViewer() {
       `}</style>
       {/* Critical Alert Banner */}
       {hasCriticalAlert && activeTransferRequest && (
-        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', zIndex: 20, background: 'rgba(127, 0, 0, 0.92)', color: '#fff', padding: '10px 24px', borderRadius: '0 0 10px 10px', borderBottom: '2px solid #ef4444', borderLeft: '1px solid #ef4444', borderRight: '1px solid #ef4444', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '720px', width: '90%', backdropFilter: 'blur(4px)' }}>
+        <div style={{ position: 'absolute', top: 0, right: '24px', zIndex: 20, background: 'rgba(127, 0, 0, 0.45)', color: '#fff', padding: '10px 24px', borderRadius: '0 0 10px 10px', borderBottom: '2px solid #ef4444', borderLeft: '1px solid #ef4444', borderRight: '1px solid #ef4444', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '480px', backdropFilter: 'blur(4px)' }}>
           <span style={{ fontSize: '18px' }}>🚨</span>
           <span style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.03em', lineHeight: 1.5 }}>
             CRITICAL SHORTAGE DETECTED: <strong>{activeTransferRequest.toHospitalName}</strong> is below{' '}

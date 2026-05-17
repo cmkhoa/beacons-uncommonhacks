@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
 import MapViewer from '../MapViewer';
+import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../../data/hospitalData';
+
+const ITEM_LABELS = { ppe: 'PPE', lifeSupport: 'Life Support', blood: 'Blood', medication: 'Medication', generalSupplies: 'General Supplies' };
 
 const CentralCommandMap = ({ isEmbedded = false }) => {
   const [expanded, setExpanded] = useState(null);
+  const [activeTransferRequest, setActiveTransferRequest] = useState(DUMMY_TRANSFER_REQUEST);
   const toggle = (card) => setExpanded(prev => prev === card ? null : card);
+
+  const criticalHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'CRITICAL_SHORTAGE');
+  const lowHospitals = LOCAL_DUMMY_DATA.filter(h => h.status === 'LOW');
+
+  const getShortItems = (hospital) =>
+    Object.entries(THRESHOLDS)
+      .filter(([key, threshold]) => hospital.inventory[key] < threshold)
+      .map(([key]) => ITEM_LABELS[key]);
+
+  const donorHospital = LOCAL_DUMMY_DATA.find(h => h.id === activeTransferRequest?.fromHospitalId);
 
   return (
     <div className={`flex flex-col lg:flex-row h-full overflow-hidden relative ${isEmbedded ? '' : 'h-screen'}`}>
@@ -57,21 +71,24 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
                   <span className="text-[11px] uppercase font-bold tracking-widest">Active Shortages</span>
                 </div>
                 <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-error">1</span>
-                  <span className="text-xs text-on-surface-variant mb-2 font-medium">Critical Facility</span>
+                  <span className="text-4xl font-bold text-error">{criticalHospitals.length}</span>
+                  <span className="text-xs text-on-surface-variant mb-2 font-medium">
+                    Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
+                  </span>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Blood</span>
-                  <span className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Life Support</span>
-                  <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">PPE</span>
-                  <span className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">Medication</span>
+                  {criticalHospitals.flatMap(h => getShortItems(h)).filter((v, i, a) => a.indexOf(v) === i).map(item => (
+                    <span key={item} className="bg-red-50 text-red-700 border border-red-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter">{item}</span>
+                  ))}
                 </div>
               </div>
             ) : (
               <div className="p-3 flex flex-col items-center">
                 <span className="text-[9px] uppercase font-bold tracking-widest text-on-surface-variant mb-1">Shortages</span>
-                <span className="text-2xl font-bold text-error">1</span>
-                <span className="text-[9px] text-on-surface-variant mt-1">Critical Facility</span>
+                <span className="text-2xl font-bold text-error">{criticalHospitals.length}</span>
+                <span className="text-[9px] text-on-surface-variant mt-1">
+                  Critical {criticalHospitals.length === 1 ? 'Facility' : 'Facilities'}
+                </span>
               </div>
             )}
           </div>
@@ -79,11 +96,14 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
 
         {/* Map Viewport */}
         <div className="w-full h-full relative overflow-hidden">
-          <MapViewer />
+          <MapViewer
+            activeTransferRequest={activeTransferRequest}
+            setActiveTransferRequest={setActiveTransferRequest}
+          />
         </div>
       </div>
 
-      {/* Right Sidebar: Alert Feed */}
+      {/* Right Sidebar: Mission Log */}
       <aside className="w-full lg:w-[380px] bg-surface border-l border-outline-variant h-full flex flex-col shrink-0 z-30 shadow-[-10px_0_25px_-10px_rgba(0,0,0,0.08)]">
         <div className="p-6 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center">
           <div>
@@ -95,31 +115,87 @@ const CentralCommandMap = ({ isEmbedded = false }) => {
             Live
           </span>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
-          <div className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all cursor-pointer relative overflow-hidden group">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
-            <div className="flex justify-between items-start mb-3 pl-2">
-              <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
-              <span className="font-mono text-[11px] text-on-surface-variant font-medium">02m ago</span>
-            </div>
-            <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">Mercy General Hospital</h4>
-            <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-4">O-Negative blood supply depleted. Requesting immediate transfer from regional hubs.</p>
-            <div className="pl-2 flex gap-2">
-              <button className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm">Execute Match</button>
-              <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
-            </div>
-          </div>
 
-          <div className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden group">
-            <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
-            <div className="flex justify-between items-start mb-3 pl-2">
-              <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
-              <span className="font-mono text-[11px] text-on-surface-variant font-medium">12m ago</span>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-surface-bright/50 custom-scrollbar">
+
+          {/* Active transfer request */}
+          {activeTransferRequest && (
+            <div className="bg-surface border border-primary/30 rounded-xl p-4 shadow-sm relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>
+              <div className="flex justify-between items-start mb-3 pl-2">
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200 uppercase tracking-tight">Transfer Active</span>
+                <span className="font-mono text-[11px] text-on-surface-variant font-medium">Now</span>
+              </div>
+              <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{activeTransferRequest.itemName} Transfer</h4>
+              <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
+                {activeTransferRequest.quantity}x {activeTransferRequest.itemName}s from <strong>{activeTransferRequest.fromHospitalName}</strong> → <strong>{activeTransferRequest.toHospitalName}</strong>
+              </p>
+              <p className="text-[11px] text-on-surface-variant pl-2 mt-1">{activeTransferRequest.distance} miles · Status: {activeTransferRequest.status}</p>
+              <div className="pl-2 mt-3">
+                <button
+                  onClick={() => setActiveTransferRequest(null)}
+                  className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
-            <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">St. Jude Medical Center</h4>
-            <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">Ventilator usage at 85% capacity. Pre-emptive sourcing recommended by autonomous agent.</p>
-          </div>
+          )}
+
+          {/* Critical shortage hospitals */}
+          {criticalHospitals.map(hospital => {
+            const shortItems = getShortItems(hospital);
+            const donor = LOCAL_DUMMY_DATA.find(h => h.status === 'DONOR');
+            return (
+              <div key={hospital.id} className="bg-surface border border-error-container rounded-xl p-4 shadow-sm hover:shadow-md hover:border-error transition-all cursor-pointer relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-error group-hover:w-1.5 transition-all"></div>
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <span className="bg-red-50 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded border border-red-200 uppercase tracking-tight">Critical Shortage</span>
+                </div>
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2 mb-3">
+                  Short on: {shortItems.join(', ')}. Nearest donor: <strong>{donor?.name}</strong>.
+                </p>
+                <div className="pl-2 flex gap-2">
+                  <button
+                    onClick={() => setActiveTransferRequest({
+                      id: `request_${hospital.id}`,
+                      itemName: shortItems[0],
+                      quantity: 3,
+                      fromHospitalId: donor?.id,
+                      fromHospitalName: donor?.name,
+                      toHospitalId: hospital.id,
+                      toHospitalName: hospital.name,
+                      status: 'PENDING',
+                      distance: 2.1,
+                    })}
+                    className="bg-primary text-white text-[11px] font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                  >
+                    Execute Match
+                  </button>
+                  <button className="bg-white text-on-surface-variant border border-outline-variant text-[11px] font-bold px-3 py-2 rounded-lg hover:bg-surface-container transition-colors">Ignore</button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Low hospitals */}
+          {lowHospitals.map(hospital => {
+            const shortItems = getShortItems(hospital);
+            return (
+              <div key={hospital.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm hover:shadow-md hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 group-hover:w-1.5 transition-all"></div>
+                <div className="flex justify-between items-start mb-3 pl-2">
+                  <span className="bg-yellow-50 text-yellow-700 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-200 uppercase tracking-tight">Elevated Demand</span>
+                </div>
+                <h4 className="font-bold text-sm text-on-surface pl-2 mb-1">{hospital.name}</h4>
+                <p className="text-[13px] leading-relaxed text-on-surface-variant pl-2">
+                  Running low on: {shortItems.join(', ')}. Pre-emptive sourcing recommended.
+                </p>
+              </div>
+            );
+          })}
+
         </div>
       </aside>
     </div>
