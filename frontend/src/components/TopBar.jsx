@@ -6,6 +6,7 @@ const TopBar = ({
   onLogout,
   onOpenVisualization,
   onOpenNursePanel,
+  onGoToTransferMap,
   isVisualizationOpen = false,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -27,7 +28,14 @@ const TopBar = ({
   return (
     <header className="bg-surface flex justify-between items-center w-full px-4 md:px-8 h-16 border-b border-outline-variant z-50 shrink-0">
       <div className="flex items-center gap-6">
-        <span className="text-2xl font-bold text-primary tracking-tight">Beacon</span>
+        <button
+          type="button"
+          onClick={onGoToTransferMap}
+          className="text-2xl font-bold text-primary tracking-tight hover:opacity-80 transition-opacity cursor-pointer"
+          title="Go to Transfer Map"
+        >
+          Beacon
+        </button>
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">

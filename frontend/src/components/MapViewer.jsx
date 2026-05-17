@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Map, Marker, Popup, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { LOCAL_DUMMY_DATA, DUMMY_TRANSFER_REQUEST, THRESHOLDS } from '../data/hospitalData';
+import { LOCAL_DUMMY_DATA, THRESHOLDS } from '../data/hospitalData';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
+const ROUTE_COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#f472b6'];
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -14,19 +15,18 @@ const getStatusColor = (status) => {
   }
 };
 
-export default function MapViewer({ activeTransferRequest: propRequest, setActiveTransferRequest: propSetRequest }) {
+const ITEM_KEY_MAP = {
+  'Ventilator': 'lifeSupport', 'Life Support': 'lifeSupport',
+  'Blood': 'blood', 'PPE': 'ppe',
+  'Medication': 'medication', 'General Supplies': 'generalSupplies',
+};
+
+export default function MapViewer({ activeTransfers = [], onTransferRouted }) {
   const [hospitals, setHospitals] = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const [internalRequest, setInternalRequest] = useState(DUMMY_TRANSFER_REQUEST);
-  const activeTransferRequest = propRequest !== undefined ? propRequest : internalRequest;
-  const setActiveTransferRequest = propSetRequest ?? setInternalRequest;
-
-  const [routeOrigin, setRouteOrigin] = useState(null);
-  const [routeDest, setRouteDest] = useState(null);
-  const [routeGeoJSON, setRouteGeoJSON] = useState(null);
-  const [etaMins, setEtaMins] = useState(null);
+  const [routesByTransferId, setRoutesByTransferId] = useState({});
+  const fetchedIds = useRef(new Set());
 
   useEffect(() => {
     setHospitals(LOCAL_DUMMY_DATA);
@@ -34,109 +34,101 @@ export default function MapViewer({ activeTransferRequest: propRequest, setActiv
   }, []);
 
   useEffect(() => {
-    if (routeOrigin && routeDest) {
-      const fetchRoute = async () => {
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${routeOrigin.location.longitude},${routeOrigin.location.latitude};${routeDest.location.longitude},${routeDest.location.latitude}?geometries=geojson&access_token=${MAPBOX_TOKEN}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.routes && data.routes[0]) {
-          setRouteGeoJSON(data.routes[0].geometry);
-          setEtaMins(Math.round(data.routes[0].duration / 60));
+    activeTransfers.forEach((transfer, i) => {
+      if (fetchedIds.current.has(transfer.id)) return;
+      fetchedIds.current.add(transfer.id);
+
+      const origin = LOCAL_DUMMY_DATA.find(h => h.id === transfer.fromHospitalId);
+      const dest = LOCAL_DUMMY_DATA.find(h => h.id === transfer.toHospitalId);
+      if (!origin || !dest) return;
+
+      const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.location.longitude},${origin.location.latitude};${dest.location.longitude},${dest.location.latitude}?geometries=geojson&access_token=${MAPBOX_TOKEN}`;
+
+      fetch(url).then(r => r.json()).then(data => {
+        if (data.routes?.[0]) {
+          const etaMins = Math.round(data.routes[0].duration / 60);
+          setRoutesByTransferId(prev => ({
+            ...prev,
+            [transfer.id]: { geoJSON: data.routes[0].geometry, etaMins, color }
+          }));
+          onTransferRouted?.(transfer.id, etaMins);
         }
-      };
-      fetchRoute();
-    } else {
-      setRouteGeoJSON(null);
-      setEtaMins(null);
-    }
-  }, [routeOrigin, routeDest]);
+      });
+    });
+
+    // Clean up routes for removed transfers
+    setRoutesByTransferId(prev => {
+      const activeIds = new Set(activeTransfers.map(t => t.id));
+      const next = {};
+      for (const id in prev) { if (activeIds.has(id)) next[id] = prev[id]; }
+      return next;
+    });
+    activeTransfers.forEach(t => {
+      if (!activeTransfers.find(at => at.id === t.id)) fetchedIds.current.delete(t.id);
+    });
+  }, [activeTransfers]);
 
   if (isLoading) {
     return <div style={{ height: '100%', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#111', color: '#fff' }}>Loading Map...</div>;
   }
 
-  const routeActive = routeOrigin !== null && routeDest !== null;
-  const hasCriticalAlert = !routeActive && (
-    activeTransferRequest?.status === 'PENDING' ||
-    hospitals.some(h => h.status === 'CRITICAL_SHORTAGE')
+  const activeTransferIds = new Set(activeTransfers.map(t => t.id));
+  const criticalUnmatched = hospitals.filter(h =>
+    h.status === 'CRITICAL_SHORTAGE' && !activeTransfers.find(t => t.toHospitalId === h.id)
   );
+  const hasCriticalAlert = criticalUnmatched.length > 0;
 
-  const transferLabel = activeTransferRequest
-    ? `${activeTransferRequest.quantity} ${activeTransferRequest.itemName}s → ${etaMins} min`
-    : (() => {
-        const shortItems = routeDest?.inventory
-          ? [
-              routeDest.inventory.ppe < THRESHOLDS.ppe && 'PPE',
-              routeDest.inventory.lifeSupport < THRESHOLDS.lifeSupport && 'Life Support',
-              routeDest.inventory.blood < THRESHOLDS.blood && 'Blood',
-              routeDest.inventory.medication < THRESHOLDS.medication && 'Medication',
-              routeDest.inventory.generalSupplies < THRESHOLDS.generalSupplies && 'General Supplies',
-            ].filter(Boolean)
-          : [];
-        return shortItems.length > 0
-          ? `Transferring ${shortItems.join(', ')} → ${etaMins} min`
-          : `ETA ${etaMins} min`;
-      })();
-
-  // Maps transfer request itemName → inventory key
-  const ITEM_KEY_MAP = {
-    'Ventilator': 'lifeSupport',
-    'Blood': 'blood',
-    'PPE': 'ppe',
-    'Medication': 'medication',
-    'General Supplies': 'generalSupplies',
-  };
+  const donorTransferMap = {};
+  activeTransfers.forEach(t => {
+    if (!donorTransferMap[t.fromHospitalId]) donorTransferMap[t.fromHospitalId] = [];
+    donorTransferMap[t.fromHospitalId].push(t);
+  });
 
   const renderPopup = (hospital) => {
     const pinColor = getStatusColor(hospital.status);
-    const isCritical = hospital.status === 'CRITICAL_SHORTAGE';
-    const isMatchedDonor = hospital.status === 'DONOR' &&
-      activeTransferRequest?.fromHospitalId === hospital.id;
-    const itemKey = activeTransferRequest ? ITEM_KEY_MAP[activeTransferRequest.itemName] : null;
-    const itemAmount = itemKey != null ? hospital.inventory[itemKey] : null;
-    const surplus = itemKey != null ? hospital.inventory[itemKey] - THRESHOLDS[itemKey] : null;
+    const matchingTransfers = activeTransfers.filter(t =>
+      t.toHospitalId === hospital.id || t.fromHospitalId === hospital.id
+    );
 
-    if (isCritical && activeTransferRequest) {
+    if (hospital.status === 'CRITICAL_SHORTAGE' && matchingTransfers.length > 0) {
+      const t = matchingTransfers[0];
+      const itemKey = ITEM_KEY_MAP[t.itemName];
       return (
         <div style={{ padding: '10px', color: '#1e293b', minWidth: '200px' }}>
           <h4 style={{ margin: '0 0 6px 0', fontWeight: 'bold', fontSize: '14px' }}>{hospital.name}</h4>
           <p style={{ margin: '0 0 8px 0', fontSize: '12px', fontWeight: 'bold', color: '#ef4444' }}>Status: CRITICAL</p>
-          <p style={{ margin: '0 0 4px 0', fontSize: '13px' }}>
-            {activeTransferRequest.itemName}: <strong>{itemAmount}</strong> available
-          </p>
-          <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#ef4444' }}>
-            Needs: <strong>{activeTransferRequest.quantity} {activeTransferRequest.itemName}s</strong>
-          </p>
-          <button onClick={() => { setRouteDest(hospital); setSelectedHospital(null); }} style={{ width: '100%', background: '#ef4444', color: '#fff', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>
-            Set as Destination
-          </button>
+          <p style={{ margin: '0 0 4px 0', fontSize: '13px' }}>{t.itemName}: <strong>{hospital.inventory[itemKey]}</strong> available</p>
+          <p style={{ margin: '0 0 0 0', fontSize: '13px', color: '#ef4444' }}>Needs: <strong>{t.quantity} {t.itemName}s</strong></p>
+          {matchingTransfers.length > 1 && <p style={{ marginTop: '6px', fontSize: '12px', color: '#64748b' }}>{matchingTransfers.length} transfers inbound</p>}
         </div>
       );
     }
 
-    if (isMatchedDonor) {
+    if (hospital.status === 'DONOR' && matchingTransfers.length > 0) {
       return (
         <div style={{ padding: '10px', color: '#1e293b', minWidth: '200px' }}>
           <h4 style={{ margin: '0 0 6px 0', fontWeight: 'bold', fontSize: '14px' }}>{hospital.name}</h4>
           <p style={{ margin: '0 0 8px 0', fontSize: '12px', fontWeight: 'bold', color: '#3b82f6', background: '#eff6ff', padding: '3px 8px', borderRadius: '4px', display: 'inline-block' }}>
-            Matched Donor
+            Active Donor · {matchingTransfers.length} transfer{matchingTransfers.length > 1 ? 's' : ''}
           </p>
-          <p style={{ margin: '8px 0 10px 0', fontSize: '13px' }}>
-            {activeTransferRequest.itemName} surplus: <strong>{surplus}</strong> available above threshold
-          </p>
-          <button onClick={() => { setRouteOrigin(hospital); setSelectedHospital(null); }} style={{ width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>
-            Set as Supply Origin
-          </button>
+          {matchingTransfers.map(t => {
+            const surplus = hospital.inventory[ITEM_KEY_MAP[t.itemName]] - THRESHOLDS[ITEM_KEY_MAP[t.itemName]];
+            return (
+              <p key={t.id} style={{ margin: '6px 0 0 0', fontSize: '13px' }}>
+                → {t.toHospitalName}: <strong>{t.quantity} {t.itemName}s</strong> (surplus: {surplus})
+              </p>
+            );
+          })}
         </div>
       );
     }
 
-    // Default popup: full inventory table
     return (
       <div style={{ padding: '8px', color: '#1e293b', minWidth: '190px' }}>
         <h4 style={{ margin: '0 0 4px 0', fontWeight: 'bold' }}>{hospital.name}</h4>
         <p style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: pinColor }}>{hospital.status}</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px', fontSize: '13px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px' }}>
           {[['PPE', 'ppe'], ['Life Support', 'lifeSupport'], ['Blood', 'blood'], ['Medication', 'medication'], ['General Supplies', 'generalSupplies']].map(([label, key]) => (
             <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{label}</span>
@@ -144,8 +136,6 @@ export default function MapViewer({ activeTransferRequest: propRequest, setActiv
             </div>
           ))}
         </div>
-        {hospital.status === 'DONOR' && <button onClick={() => { setRouteOrigin(hospital); setSelectedHospital(null); }} style={{ width: '100%', background: '#3b82f6', color: '#fff', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px' }}>Set as Supply Origin</button>}
-        {(hospital.status === 'CRITICAL_SHORTAGE' || hospital.status === 'LOW') && <button onClick={() => { setRouteDest(hospital); setSelectedHospital(null); }} style={{ width: '100%', background: '#ef4444', color: '#fff', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: '4px' }}>Set as Destination</button>}
       </div>
     );
   };
@@ -157,56 +147,48 @@ export default function MapViewer({ activeTransferRequest: propRequest, setActiv
           0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6), 0 0 8px #3b82f6; }
           50% { box-shadow: 0 0 0 10px rgba(59,130,246,0), 0 0 20px #3b82f6; }
         }
+        .mapboxgl-popup-close-button {
+          font-size: 22px; width: 32px; height: 32px;
+          line-height: 32px; padding: 0; right: 4px; top: 4px;
+        }
       `}</style>
-      {/* Critical Alert Banner */}
-      {hasCriticalAlert && activeTransferRequest && (
+
+      {hasCriticalAlert && (
         <div style={{ position: 'absolute', top: 0, right: '24px', zIndex: 20, background: 'rgba(127, 0, 0, 0.45)', color: '#fff', padding: '10px 24px', borderRadius: '0 0 10px 10px', borderBottom: '2px solid #ef4444', borderLeft: '1px solid #ef4444', borderRight: '1px solid #ef4444', display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '480px', backdropFilter: 'blur(4px)' }}>
           <span style={{ fontSize: '18px' }}>🚨</span>
           <span style={{ fontSize: '12px', fontWeight: 'bold', letterSpacing: '0.03em', lineHeight: 1.5 }}>
-            CRITICAL SHORTAGE DETECTED: <strong>{activeTransferRequest.toHospitalName}</strong> is below{' '}
-            <strong>{activeTransferRequest.itemName}</strong> threshold. Beacon matched{' '}
-            <strong>{activeTransferRequest.fromHospitalName}</strong> as the nearest donor.
+            {criticalUnmatched.length} CRITICAL SHORTAGE{criticalUnmatched.length > 1 ? 'S' : ''} DETECTED:{' '}
+            {criticalUnmatched.map(h => h.name).join(', ')}. See Mission Log.
           </span>
         </div>
       )}
 
-      {/* ETA / Transfer Info Box */}
-      {etaMins && (
-        <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(15, 23, 42, 0.9)', color: '#fff', padding: '15px 25px', borderRadius: '8px', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '15px', zIndex: 10 }}>
-          <div>
-            <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '4px' }}>Active Transfer</div>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#38bdf8' }}>{transferLabel}</div>
-          </div>
-          <button onClick={() => { setRouteOrigin(null); setRouteDest(null); setSelectedHospital(null); }} style={{ background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>
-            Clear Route
-          </button>
-        </div>
-      )}
-
       <Map initialViewState={{ longitude: -87.6298, latitude: 41.8781, zoom: 11 }} mapStyle="mapbox://styles/mapbox/dark-v11" mapboxAccessToken={MAPBOX_TOKEN}>
-        {routeGeoJSON && (
-          <Source id="route-source" type="geojson" data={{ type: 'Feature', properties: {}, geometry: routeGeoJSON }}>
-            <Layer id="route-line" type="line" paint={{ 'line-color': '#38bdf8', 'line-width': 5, 'line-opacity': 0.8 }} />
-          </Source>
-        )}
+        {activeTransfers.map(transfer => {
+          const route = routesByTransferId[transfer.id];
+          if (!route) return null;
+          return (
+            <Source key={transfer.id} id={`route-${transfer.id}`} type="geojson" data={{ type: 'Feature', properties: {}, geometry: route.geoJSON }}>
+              <Layer id={`line-${transfer.id}`} type="line" paint={{ 'line-color': route.color, 'line-width': 5, 'line-opacity': 0.8 }} />
+            </Source>
+          );
+        })}
 
         {hospitals.map(hospital => {
           if (!hospital.location) return null;
           const pinColor = getStatusColor(hospital.status);
-          const isOrigin = routeOrigin?.id === hospital.id;
-          const isDest = routeDest?.id === hospital.id;
-          const isMatchedDonor = hospital.status === 'DONOR' &&
-            activeTransferRequest?.fromHospitalId === hospital.id;
+          const isActiveDonor = !!donorTransferMap[hospital.id]?.length;
+          const isActiveRecipient = activeTransfers.some(t => t.toHospitalId === hospital.id);
           const pinSize = hospital.status === 'DONOR' ? '28px' : '22px';
           const pinStyle = {
             backgroundColor: pinColor,
             width: pinSize,
             height: pinSize,
             borderRadius: '50%',
-            border: (isOrigin || isDest) ? '3px solid #fff' : '2px solid rgba(255,255,255,0.3)',
-            boxShadow: (isOrigin || isDest) ? `0 0 15px ${pinColor}` : `0 0 8px ${pinColor}`,
+            border: (isActiveDonor || isActiveRecipient) ? '3px solid #fff' : '2px solid rgba(255,255,255,0.3)',
+            boxShadow: (isActiveDonor || isActiveRecipient) ? `0 0 15px ${pinColor}` : `0 0 8px ${pinColor}`,
             cursor: 'pointer',
-            animation: isMatchedDonor ? 'donor-pulse 1.5s ease-in-out infinite' : 'none',
+            animation: isActiveDonor ? 'donor-pulse 1.5s ease-in-out infinite' : 'none',
           };
 
           return (
@@ -214,7 +196,6 @@ export default function MapViewer({ activeTransferRequest: propRequest, setActiv
               <Marker longitude={hospital.location.longitude} latitude={hospital.location.latitude} anchor="bottom">
                 <div onClick={(e) => { e.stopPropagation(); setSelectedHospital(hospital); }} style={pinStyle} />
               </Marker>
-
               {selectedHospital?.id === hospital.id && (
                 <Popup longitude={hospital.location.longitude} latitude={hospital.location.latitude} anchor="top" onClose={() => setSelectedHospital(null)} closeOnClick={false}>
                   {renderPopup(hospital)}
