@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPatch, apiPost } from '../../lib/api';
+import { VoiceAssistant } from '../VoiceAssistant';
 
 const CATEGORY_DEFS = [
   { id: 'PPE', label: 'PPE' },
@@ -16,13 +17,6 @@ const ACTION_LABELS = {
   removed: 'Removed',
   added: 'Added',
 };
-
-const PRESET_COMMANDS = [
-  'We just used five ventilators.',
-  'Our mask count is low.',
-  'Add twenty boxes of gloves.',
-  'We need more N95 masks.',
-];
 
 const NurseInputPage = ({ session, isEmbedded = false }) => {
   const [hospital, setHospital] = useState(null);
@@ -49,13 +43,6 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
   // ── Submission feedback ────────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null); // { kind: 'success' | 'error', text }
-
-  // ── Voice assistant (kept as-is, demo only) ────────────────────────────
-  const [isRecording, setIsRecording] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [beaconResponse, setBeaconResponse] = useState(null);
-  const [transcript, setTranscript] = useState('');
-  const [isPlaying, setIsPlaying] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!session?.hospitalId) return;
@@ -90,14 +77,22 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
     }));
   }, [hospital]);
 
+  const availableInventoryEntries = useMemo(
+    () =>
+      allInventoryEntries.filter(
+        (entry) => Number(entry.availableCount ?? 0) > 0
+      ),
+    [allInventoryEntries]
+  );
+
   const hospitalCategories = useMemo(() => {
     const ids = new Set();
-    for (const entry of allInventoryEntries) {
+    for (const entry of availableInventoryEntries) {
       const cat = itemMap.get(entry.itemId)?.category;
       if (cat) ids.add(cat);
     }
     return CATEGORY_DEFS.filter((c) => ids.has(c.id));
-  }, [allInventoryEntries, itemMap]);
+  }, [availableInventoryEntries, itemMap]);
 
   const emergencyCategories = useMemo(
     () => [...hospitalCategories, { id: CATEGORY_OTHER, label: 'Other' }],
@@ -106,11 +101,11 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
 
   const inventoryEntriesForCategory = useMemo(() => {
     if (!invCategory) return [];
-    return allInventoryEntries.filter((entry) => {
+    return availableInventoryEntries.filter((entry) => {
       const item = itemMap.get(entry.itemId);
       return item?.category === invCategory;
     });
-  }, [allInventoryEntries, itemMap, invCategory]);
+  }, [availableInventoryEntries, itemMap, invCategory]);
 
   const catalogItemsForErCategory = useMemo(() => {
     if (!erCategory || erCategory === CATEGORY_OTHER) return [];
@@ -282,39 +277,6 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  // ── Voice assistant handlers (demo only) ───────────────────────────────
-  const handleStartRecording = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        setTranscript('We just used five ventilators.');
-        setBeaconResponse(
-          "Got it. I've updated the inventory: 5 ventilators used. Your stock is now low, so I'm routing more from Mercy Hospital."
-        );
-      }, 2000);
-    } else {
-      setIsRecording(true);
-      setTranscript('');
-      setBeaconResponse(null);
-    }
-  };
-  const handlePresetCommand = (command) => {
-    if (isRecording) setIsRecording(false);
-    setTranscript(command);
-    setIsLoading(true);
-    setBeaconResponse(null);
-    setTimeout(() => {
-      setIsLoading(false);
-      setBeaconResponse("Got it. I've updated the inventory based on your command.");
-    }, 2000);
-  };
-  const handlePlayResponse = () => {
-    setIsPlaying(true);
-    setTimeout(() => setIsPlaying(false), 3000);
   };
 
   return (
@@ -661,110 +623,14 @@ const NurseInputPage = ({ session, isEmbedded = false }) => {
             )}
           </div>
 
-          {/* ── RIGHT: voice assistant (unchanged from prior demo) ───── */}
+          {/* ── RIGHT: voice assistant ──────────────────────────────── */}
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-gradient-to-b from-indigo-50 to-white border border-indigo-100 rounded-2xl p-6 shadow-sm relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">mic</span>
-                    Voice Assistant
-                  </h3>
-                  <p className="text-[11px] font-bold text-indigo-500/70 uppercase tracking-widest mt-1">
-                    Autonomous Logging
-                  </p>
-                </div>
-                <button
-                  onClick={handleStartRecording}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform ${
-                    isRecording
-                      ? 'bg-error text-white animate-pulse scale-105'
-                      : 'bg-primary text-white hover:scale-105 active:scale-95 group-hover:animate-pulse'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-3xl">
-                    {isRecording ? 'stop' : 'mic'}
-                  </span>
-                </button>
-              </div>
-
-              <p className="text-sm text-indigo-800/80 mb-6 leading-relaxed">
-                Tap the microphone icon or say <strong>"Hey Beacon"</strong> to
-                quickly log inventory changes while your hands are full.
-              </p>
-
-              {(isRecording || isLoading || transcript || beaconResponse) && (
-                <div className="mb-6 bg-white rounded-xl p-4 border border-indigo-100 shadow-inner">
-                  {isRecording && (
-                    <div className="flex items-center gap-2 text-error font-medium animate-pulse">
-                      <div className="w-2 h-2 rounded-full bg-error"></div>
-                      Listening...
-                    </div>
-                  )}
-                  {isLoading && (
-                    <div className="flex items-center gap-2 text-primary font-medium">
-                      <span className="material-symbols-outlined animate-spin text-sm">
-                        refresh
-                      </span>
-                      Processing voice input...
-                    </div>
-                  )}
-                  {transcript && !isRecording && !isLoading && (
-                    <div className="mb-3">
-                      <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
-                        You said:
-                      </p>
-                      <p className="text-sm text-on-surface italic">
-                        "{transcript}"
-                      </p>
-                    </div>
-                  )}
-                  {beaconResponse && !isLoading && (
-                    <div className="mt-3 pt-3 border-t border-indigo-50">
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">
-                        Beacon Response:
-                      </p>
-                      <p className="text-sm text-indigo-900 font-medium mb-3">
-                        {beaconResponse}
-                      </p>
-                      <button
-                        onClick={handlePlayResponse}
-                        className={`w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                          isPlaying
-                            ? 'bg-primary/20 text-primary'
-                            : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {isPlaying ? 'volume_up' : 'play_arrow'}
-                        </span>
-                        {isPlaying ? 'Playing...' : 'Play Response'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                  Try saying...
-                </p>
-                {PRESET_COMMANDS.map((cmd, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => handlePresetCommand(cmd)}
-                    className="bg-white border border-indigo-100 rounded-xl p-3 shadow-sm hover:border-primary/40 cursor-pointer transition-colors flex gap-3 items-center"
-                  >
-                    <span className="material-symbols-outlined text-indigo-300">
-                      chat
-                    </span>
-                    <p className="text-sm font-medium text-indigo-900">“{cmd}”</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <VoiceAssistant
+              session={session}
+              hospital={hospital}
+              inventoryEntries={allInventoryEntries}
+              itemMap={itemMap}
+            />
           </div>
         </div>
       </main>
