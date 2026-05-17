@@ -68,7 +68,10 @@ function App() {
     return <RoleLogin onLogin={handleLogin} />;
   }
 
-  const showSidebar = session.role !== 'nurse' || activeView === 'visualization';
+  const showSidebar =
+    session.role === 'dispatcher' ||
+    ((session.role === 'nurse' || session.role === 'admin') &&
+      activeView === 'visualization');
 
   const renderView = () => {
     if (activeView === 'visualization') {
