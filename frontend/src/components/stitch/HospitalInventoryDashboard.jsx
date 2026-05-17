@@ -60,32 +60,55 @@ const CATEGORY_ICONS = {
   GENERAL_SUPPLIES: 'inventory_2',
 };
 
-const HospitalInventoryDashboard = ({ isEmbedded = false }) => {
+const CATEGORY_LABELS = {
+  PPE: 'PPE',
+  LIFE_SUPPORT: 'Life Support',
+  BLOOD: 'Blood',
+  MEDICATION: 'Medication',
+  GENERAL_SUPPLIES: 'General Supplies',
+};
+
+const HospitalInventoryDashboard = ({ session, isEmbedded = false }) => {
   const [rows, setRows] = useState([]);
   const [drafts, setDrafts] = useState({});
+  const [scopedHospitalName, setScopedHospitalName] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
+  const hospitalId = session?.hospitalId ?? null;
+  const isSingleHospital = Boolean(hospitalId);
+
   const loadInventory = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [hJson, iJson] = await Promise.all([
-        apiGet('/api/hospitals?hydrate=true'),
-        apiGet('/api/items'),
-      ]);
+      const iJson = await apiGet('/api/items');
       const itemMap = new Map((iJson.items ?? []).map((i) => [i.id, i]));
-      const flat = (hJson.hospitals ?? []).flatMap((h) =>
+
+      let hospitals = [];
+      if (hospitalId) {
+        const hJson = await apiGet(`/api/hospitals/${hospitalId}`);
+        if (hJson.hospital) hospitals = [hJson.hospital];
+        setScopedHospitalName(hJson.hospital.name ?? null);
+      } else {
+        const hJson = await apiGet('/api/hospitals?hydrate=true');
+        hospitals = hJson.hospitals ?? [];
+        setScopedHospitalName(null);
+      }
+
+      const flat = hospitals.flatMap((h) =>
         (h.inventory ?? []).map((entry) => {
           const item = itemMap.get(entry.itemId);
+          const category = item?.category ?? 'GENERAL_SUPPLIES';
           return {
             id: entry.id,
             hospitalId: entry.hospitalId ?? h.id,
             hospitalName: h.name,
             itemName: item?.name ?? entry.itemId,
-            category: item?.category ?? 'GENERAL_SUPPLIES',
+            category,
+            categoryLabel: CATEGORY_LABELS[category] ?? category,
             count: entry.count ?? 0,
             status: entry.status ?? 'ADEQUATE',
           };
@@ -102,7 +125,7 @@ const HospitalInventoryDashboard = ({ isEmbedded = false }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hospitalId]);
 
   useEffect(() => {
     loadInventory();
@@ -183,6 +206,15 @@ const HospitalInventoryDashboard = ({ isEmbedded = false }) => {
     >
       <main className="flex-1 overflow-y-auto p-6 md:p-10">
         <div className="max-w-6xl mx-auto">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-on-surface">Hospital Inventory</h2>
+            <p className="text-sm text-on-surface-variant mt-1">
+              {isSingleHospital && scopedHospitalName
+                ? `Showing supplies at ${scopedHospitalName} only.`
+                : 'Regional view — all hospitals. Nurses only edit their own hospital.'}
+            </p>
+          </div>
+
           {feedback && (
             <div
               className={`mb-4 px-4 py-3 rounded-lg text-sm border ${
@@ -257,7 +289,7 @@ const HospitalInventoryDashboard = ({ isEmbedded = false }) => {
                             {row.itemName}
                           </p>
                           <p className="text-[11px] text-on-surface-variant font-medium">
-                            {row.hospitalName}
+                            {isSingleHospital ? row.categoryLabel : row.hospitalName}
                           </p>
                         </div>
                       </div>

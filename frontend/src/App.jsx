@@ -60,7 +60,7 @@ function App() {
 
   const renderView = () => {
     if (activeView === 'visualization') {
-      return <Dispatcher tab={dispatcherTab} />;
+      return <Dispatcher tab={dispatcherTab} session={session} />;
     }
 
     switch (session.role) {
@@ -70,7 +70,7 @@ function App() {
         return <AdminView />;
       case 'dispatcher':
       default:
-        return <Dispatcher tab={dispatcherTab} />;
+        return <Dispatcher tab={dispatcherTab} session={session} />;
     }
   };
 
