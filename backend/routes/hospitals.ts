@@ -86,7 +86,7 @@ router.get("/:hospitalId/inventory", async (req: Request, res: Response) => {
 router.patch("/:hospitalId/inventory/:entryId", async (req: Request, res: Response) => {
   try {
     const { hospitalId, entryId } = req.params;
-    const { count, change, source, message } = req.body;
+    const { count, change, source, message, nurseId } = req.body;
 
     // Resolve delta: use `change` directly, or compute from absolute `count`
     let delta = change;
@@ -104,11 +104,15 @@ router.patch("/:hospitalId/inventory/:entryId", async (req: Request, res: Respon
       return;
     }
 
+    const resolvedSource =
+      source ?? (nurseId ? "MANUAL_FORM" : "SYSTEM");
+
     const result = await processInventoryUpdate({
       hospitalId,
       entryId,
       change: delta,
-      source: source || "MANUAL_FORM",
+      nurseId,
+      source: resolvedSource,
       message: message || "Manual inventory update",
     });
     res.json(result);

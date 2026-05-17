@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiGet, apiPatch, apiPost } from '../../lib/api';
 
-const API_BASE = 'http://localhost:5000';
-
-const CATEGORIES = [
+const CATEGORY_DEFS = [
   { id: 'PPE', label: 'PPE' },
   { id: 'LIFE_SUPPORT', label: 'Life Support' },
   { id: 'BLOOD', label: 'Blood' },
@@ -10,18 +9,13 @@ const CATEGORIES = [
   { id: 'GENERAL_SUPPLIES', label: 'General Supplies' },
 ];
 
-const URGENCY_LEVELS = [
-  { id: 'CRITICAL', label: 'Critical' },
-  { id: 'HIGH', label: 'High' },
-  { id: 'NORMAL', label: 'Normal' },
-];
+const CATEGORY_OTHER = 'OTHER';
 
-const NEEDED_BY_OPTIONS = [
-  { id: 'ASAP', label: 'ASAP' },
-  { id: 'WITHIN_1H', label: 'Within 1 hour' },
-  { id: 'WITHIN_4H', label: 'Within 4 hours' },
-  { id: 'TODAY', label: 'Today' },
-];
+const ACTION_LABELS = {
+  used: 'Used',
+  removed: 'Removed',
+  added: 'Added',
+};
 
 const PRESET_COMMANDS = [
   'We just used five ventilators.',
@@ -30,8 +24,8 @@ const PRESET_COMMANDS = [
   'We need more N95 masks.',
 ];
 
-const NurseInputPage = ({ isEmbedded = false }) => {
-  const [hospitals, setHospitals] = useState([]);
+const NurseInputPage = ({ session, isEmbedded = false }) => {
+  const [hospital, setHospital] = useState(null);
   const [items, setItems] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState(null);
@@ -41,17 +35,15 @@ const NurseInputPage = ({ isEmbedded = false }) => {
   // ── Section 3A: inventory update ───────────────────────────────────────
   const [invCategory, setInvCategory] = useState('');
   const [invEntryId, setInvEntryId] = useState('');
-  const [invAction, setInvAction] = useState('used'); // 'used' | 'added'
+  const [invAction, setInvAction] = useState('used'); // 'used' | 'removed' | 'added'
   const [invQuantity, setInvQuantity] = useState('');
   const [invNote, setInvNote] = useState('');
 
   // ── Section 3B: emergency request ──────────────────────────────────────
-  const [erCategory, setErCategory] = useState('MEDICATION');
-  const [erItemName, setErItemName] = useState('');
+  const [erCategory, setErCategory] = useState('');
+  const [erItemId, setErItemId] = useState('');
+  const [erCustomItemName, setErCustomItemName] = useState('');
   const [erQuantity, setErQuantity] = useState('');
-  const [erUrgency, setErUrgency] = useState('CRITICAL');
-  const [erNeededBy, setErNeededBy] = useState('ASAP');
-  const [erAllowSubstitutes, setErAllowSubstitutes] = useState(true);
   const [erReason, setErReason] = useState('');
 
   // ── Submission feedback ────────────────────────────────────────────────
@@ -65,57 +57,81 @@ const NurseInputPage = ({ isEmbedded = false }) => {
   const [transcript, setTranscript] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const loadData = useCallback(async () => {
+    if (!session?.hospitalId) return;
+    setLoadingData(true);
+    setDataError(null);
+    try {
+      const [hData, iData] = await Promise.all([
+        apiGet(`/api/hospitals/${session.hospitalId}`),
+        apiGet('/api/items'),
+      ]);
+      setHospital(hData.hospital ?? null);
+      setItems(iData.items ?? []);
+    } catch (err) {
+      setDataError(err.message);
+    } finally {
+      setLoadingData(false);
+    }
+  }, [session?.hospitalId]);
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoadingData(true);
-      setDataError(null);
-      try {
-        const [hRes, iRes] = await Promise.all([
-          fetch(`${API_BASE}/api/hospitals?hydrate=true`),
-          fetch(`${API_BASE}/api/items`),
-        ]);
-        if (!hRes.ok || !iRes.ok) throw new Error('Failed to load data');
-        const hJson = await hRes.json();
-        const iJson = await iRes.json();
-        if (cancelled) return;
-        setHospitals(hJson.hospitals ?? []);
-        setItems(iJson.items ?? []);
-      } catch (err) {
-        if (!cancelled) setDataError(err.message);
-      } finally {
-        if (!cancelled) setLoadingData(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const itemMap = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
-  const hospitalMap = useMemo(
-    () => new Map(hospitals.map((h) => [h.id, h])),
-    [hospitals]
+
+  const allInventoryEntries = useMemo(() => {
+    if (!hospital?.inventory) return [];
+    return hospital.inventory.map((entry) => ({
+      ...entry,
+      hospitalId: entry.hospitalId ?? hospital.id,
+      hospitalName: hospital.name,
+    }));
+  }, [hospital]);
+
+  const hospitalCategories = useMemo(() => {
+    const ids = new Set();
+    for (const entry of allInventoryEntries) {
+      const cat = itemMap.get(entry.itemId)?.category;
+      if (cat) ids.add(cat);
+    }
+    return CATEGORY_DEFS.filter((c) => ids.has(c.id));
+  }, [allInventoryEntries, itemMap]);
+
+  const emergencyCategories = useMemo(
+    () => [...hospitalCategories, { id: CATEGORY_OTHER, label: 'Other' }],
+    [hospitalCategories]
   );
 
-  // Flat list of every inventory entry across every hospital.
-  const allInventoryEntries = useMemo(() => {
-    return hospitals.flatMap((h) =>
-      (h.inventory ?? []).map((entry) => ({
-        ...entry,
-        hospitalId: entry.hospitalId ?? h.id,
-        hospitalName: h.name,
-      }))
-    );
-  }, [hospitals]);
-
   const inventoryEntriesForCategory = useMemo(() => {
-    if (!invCategory) return allInventoryEntries;
+    if (!invCategory) return [];
     return allInventoryEntries.filter((entry) => {
       const item = itemMap.get(entry.itemId);
       return item?.category === invCategory;
     });
   }, [allInventoryEntries, itemMap, invCategory]);
+
+  const catalogItemsForErCategory = useMemo(() => {
+    if (!erCategory || erCategory === CATEGORY_OTHER) return [];
+    return items
+      .filter((i) => i.category === erCategory)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, erCategory]);
+
+  useEffect(() => {
+    if (hospitalCategories.length === 0) return;
+    setInvCategory((prev) =>
+      prev && hospitalCategories.some((c) => c.id === prev)
+        ? prev
+        : hospitalCategories[0].id
+    );
+    setErCategory((prev) =>
+      prev && emergencyCategories.some((c) => c.id === prev)
+        ? prev
+        : hospitalCategories[0].id
+    );
+  }, [hospitalCategories, emergencyCategories]);
 
   useEffect(() => {
     setInvEntryId((prev) =>
@@ -123,8 +139,12 @@ const NurseInputPage = ({ isEmbedded = false }) => {
     );
   }, [inventoryEntriesForCategory]);
 
-  // Auto-pick first hospital as the destination for emergency requests.
-  const emergencyHospital = hospitals[0];
+  useEffect(() => {
+    setErItemId('');
+    setErCustomItemName('');
+  }, [erCategory]);
+
+  const emergencyHospital = hospital;
 
   const flash = (kind, text) => {
     setFeedback({ kind, text });
@@ -134,6 +154,14 @@ const NurseInputPage = ({ isEmbedded = false }) => {
   // ── Submit: Inventory Update ───────────────────────────────────────────
   const submitInventoryUpdate = async (e) => {
     e.preventDefault();
+    if (!session?.userId || !session?.hospitalId) {
+      flash('error', 'Sign in again to submit inventory updates.');
+      return;
+    }
+    if (!invCategory) {
+      flash('error', 'Please pick a category.');
+      return;
+    }
     if (!invEntryId) {
       flash('error', 'Please pick an item to update.');
       return;
@@ -149,32 +177,27 @@ const NurseInputPage = ({ isEmbedded = false }) => {
       return;
     }
     const itemName = itemMap.get(entry.itemId)?.name ?? 'item';
-    const change = invAction === 'used' ? -qty : qty;
+    const change = invAction === 'added' ? qty : -qty;
+    const actionLabel = ACTION_LABELS[invAction] ?? invAction;
     const message =
       invNote.trim() ||
-      `${invAction === 'used' ? 'Used' : 'Added'} ${qty} ${itemName} at ${entry.hospitalName}`;
+      `${actionLabel} ${qty} ${itemName} at ${entry.hospitalName}`;
 
     setSubmitting(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/hospitals/${entry.hospitalId}/inventory/${entry.id}`,
+      await apiPatch(
+        `/api/hospitals/${entry.hospitalId}/inventory/${entry.id}`,
         {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            change,
-            source: 'MANUAL_FORM',
-            message,
-          }),
+          change,
+          nurseId: session.userId,
+          source: 'MANUAL_FORM',
+          message,
         }
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? `PATCH failed (${res.status})`);
-      }
+      await loadData();
       flash(
         'success',
-        `Logged: ${invAction === 'used' ? '-' : '+'}${qty} ${itemName}.`
+        `Logged: ${invAction === 'added' ? '+' : '-'}${qty} ${itemName} (${actionLabel}).`
       );
       setInvQuantity('');
       setInvNote('');
@@ -188,71 +211,70 @@ const NurseInputPage = ({ isEmbedded = false }) => {
   // ── Submit: Emergency Supply Request ───────────────────────────────────
   const submitEmergencyRequest = async (e) => {
     e.preventDefault();
+    if (!session?.userId || !session?.hospitalId) {
+      flash('error', 'Sign in again to submit requests.');
+      return;
+    }
     if (!emergencyHospital) {
       flash('error', 'No destination hospital available.');
       return;
     }
-    if (!erItemName.trim()) {
-      flash('error', 'Please enter the requested item.');
+    if (!erCategory) {
+      flash('error', 'Please pick a category.');
       return;
     }
+
+    const isOther = erCategory === CATEGORY_OTHER;
+    const catalogItem = items.find((i) => i.id === erItemId);
+    const displayName = isOther
+      ? erCustomItemName.trim()
+      : catalogItem?.name;
+
+    if (!displayName) {
+      flash(
+        'error',
+        isOther ? 'Please enter the requested item.' : 'Please select an item.'
+      );
+      return;
+    }
+
     const qty = Number(erQuantity);
     if (!Number.isFinite(qty) || qty <= 0) {
       flash('error', 'Quantity needed must be a positive number.');
       return;
     }
 
-    // Try fuzzy-match an existing catalog item.
-    const target = erItemName.trim().toLowerCase();
-    let matchedItem = items.find((i) => i.name.toLowerCase() === target);
-    if (!matchedItem) {
-      matchedItem = items.find(
-        (i) =>
-          i.category === erCategory &&
-          (i.name.toLowerCase().includes(target) ||
-            target.includes(i.name.toLowerCase()))
-      );
-    }
-    const resolvedItemId = matchedItem?.id ?? `RARE:${erItemName.trim()}`;
-    const resolutionNote = matchedItem
-      ? `matched catalog item ${matchedItem.name}`
-      : 'free-text request, no catalog match';
-
     const reason = [
-      `[${erUrgency}] ${erItemName.trim()} × ${qty}`,
-      `Needed by: ${erNeededBy}. Substitutes ${
-        erAllowSubstitutes ? 'allowed' : 'not allowed'
-      }.`,
-      `Category: ${erCategory}.`,
+      `${displayName} × ${qty}`,
       erReason.trim() ? `Notes: ${erReason.trim()}` : null,
-      `(${resolutionNote})`,
     ]
       .filter(Boolean)
       .join(' ');
 
+    const payload = {
+      fromHospitalId: emergencyHospital.id,
+      quantity: qty,
+      reason,
+      staffName: session.userName,
+    };
+
+    if (isOther) {
+      payload.itemName = displayName;
+      payload.itemCategory = 'GENERAL_SUPPLIES';
+    } else {
+      if (!catalogItem) {
+        flash('error', 'Please select a valid catalog item.');
+        return;
+      }
+      payload.itemId = catalogItem.id;
+    }
+
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/requests`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toHospitalId: emergencyHospital.id,
-          itemId: resolvedItemId,
-          quantity: qty,
-          reason,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? `POST failed (${res.status})`);
-      }
-      flash(
-        'success',
-        matchedItem
-          ? `Emergency request sent: ${qty} × ${matchedItem.name}.`
-          : `Emergency request sent (free-text): ${qty} × ${erItemName.trim()}.`
-      );
-      setErItemName('');
+      await apiPost('/api/requests', payload);
+      flash('success', `Emergency request sent: ${qty} × ${displayName}.`);
+      setErItemId('');
+      setErCustomItemName('');
       setErQuantity('');
       setErReason('');
     } catch (err) {
@@ -301,22 +323,6 @@ const NurseInputPage = ({ isEmbedded = false }) => {
         isEmbedded ? '' : 'h-screen'
       }`}
     >
-      <header className="flex-shrink-0 px-6 md:px-10 py-6 border-b border-outline-variant bg-white">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest">
-            Rapid Input
-          </span>
-          <span className="text-on-surface-variant font-medium text-xs">
-            Nurse Station
-          </span>
-        </div>
-        <h2 className="text-2xl font-bold text-on-surface">Nurse Supply Form</h2>
-        <p className="text-sm text-on-surface-variant mt-1 max-w-2xl">
-          Log inventory changes or escalate emergency supply needs. Hands-free
-          updates via the voice assistant on the right.
-        </p>
-      </header>
-
       {feedback && (
         <div
           className={`mx-6 md:mx-10 mt-4 px-4 py-3 rounded-lg text-sm border ${
@@ -421,14 +427,18 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                     <select
                       value={invCategory}
                       onChange={(e) => setInvCategory(e.target.value)}
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      disabled={loadingData || hospitalCategories.length === 0}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none disabled:opacity-50"
                     >
-                      <option value="">All categories</option>
-                      {CATEGORIES.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
+                      {hospitalCategories.length === 0 ? (
+                        <option value="">No categories</option>
+                      ) : (
+                        hospitalCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.label}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
                   <div>
@@ -439,7 +449,9 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                       value={invEntryId}
                       onChange={(e) => setInvEntryId(e.target.value)}
                       disabled={
-                        loadingData || inventoryEntriesForCategory.length === 0
+                        loadingData ||
+                        !invCategory ||
+                        inventoryEntriesForCategory.length === 0
                       }
                       className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none disabled:opacity-50"
                     >
@@ -454,7 +466,7 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                         const item = itemMap.get(entry.itemId);
                         return (
                           <option key={entry.id} value={entry.id}>
-                            {item?.name ?? entry.itemId} — {entry.hospitalName} ({entry.count} on hand)
+                            {item?.name ?? entry.itemId} ({entry.count} on hand)
                           </option>
                         );
                       })}
@@ -477,7 +489,18 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                             : 'text-on-surface-variant hover:text-on-surface'
                         }`}
                       >
-                        Used / Removed
+                        Used
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInvAction('removed')}
+                        className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                          invAction === 'removed'
+                            ? 'bg-white shadow-sm text-amber-700'
+                            : 'text-on-surface-variant hover:text-on-surface'
+                        }`}
+                      >
+                        Removed
                       </button>
                       <button
                         type="button"
@@ -537,19 +560,12 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                 onSubmit={submitEmergencyRequest}
                 className="bg-white border border-error/30 rounded-2xl p-6 shadow-sm space-y-5"
               >
-                <div>
-                  <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
-                    <span className="material-symbols-outlined text-error">
-                      e911_emergency
-                    </span>
-                    Emergency Supply Request
-                  </h3>
-                  {emergencyHospital && (
-                    <p className="text-[11px] text-on-surface-variant mt-1">
-                      Sending as: <span className="font-bold text-on-surface">{emergencyHospital.name}</span>
-                    </p>
-                  )}
-                </div>
+                <h3 className="text-base font-bold text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-error">
+                    e911_emergency
+                  </span>
+                  Emergency Supply Request
+                </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -561,7 +577,7 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                       onChange={(e) => setErCategory(e.target.value)}
                       className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
                     >
-                      {CATEGORIES.map((c) => (
+                      {emergencyCategories.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.label}
                         </option>
@@ -572,79 +588,50 @@ const NurseInputPage = ({ isEmbedded = false }) => {
                     <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
                       Requested Item
                     </label>
-                    <input
-                      type="text"
-                      value={erItemName}
-                      onChange={(e) => setErItemName(e.target.value)}
-                      placeholder="e.g. Cyanide antidote kit"
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
-                    />
+                    {erCategory === CATEGORY_OTHER ? (
+                      <input
+                        type="text"
+                        value={erCustomItemName}
+                        onChange={(e) => setErCustomItemName(e.target.value)}
+                        placeholder="e.g. Cyanide antidote kit"
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
+                      />
+                    ) : (
+                      <select
+                        value={erItemId}
+                        onChange={(e) => setErItemId(e.target.value)}
+                        disabled={
+                          !erCategory || catalogItemsForErCategory.length === 0
+                        }
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none disabled:opacity-50"
+                      >
+                        <option value="">
+                          {catalogItemsForErCategory.length === 0
+                            ? 'No items in this category'
+                            : 'Select item…'}
+                        </option>
+                        {catalogItemsForErCategory.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
-                      Quantity Needed
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={erQuantity}
-                      onChange={(e) => setErQuantity(e.target.value)}
-                      placeholder="e.g. 2"
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface font-mono focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
-                      Urgency
-                    </label>
-                    <select
-                      value={erUrgency}
-                      onChange={(e) => setErUrgency(e.target.value)}
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
-                    >
-                      {URGENCY_LEVELS.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
-                      Needed By
-                    </label>
-                    <select
-                      value={erNeededBy}
-                      onChange={(e) => setErNeededBy(e.target.value)}
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
-                    >
-                      {NEEDED_BY_OPTIONS.map((n) => (
-                        <option key={n.id} value={n.id}>
-                          {n.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      checked={erAllowSubstitutes}
-                      onChange={(e) => setErAllowSubstitutes(e.target.checked)}
-                      className="w-4 h-4 accent-primary"
-                    />
-                    <span className="font-medium text-on-surface">
-                      Allow substitutes
-                    </span>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
+                    Quantity Needed
                   </label>
-                  <span className="text-[11px] text-on-surface-variant">
-                    Donor hospital may send a clinically-equivalent item.
-                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={erQuantity}
+                    onChange={(e) => setErQuantity(e.target.value)}
+                    placeholder="e.g. 2"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl px-3 py-2.5 text-sm text-on-surface font-mono focus:ring-2 focus:ring-error/20 focus:border-error outline-none"
+                  />
                 </div>
 
                 <div>

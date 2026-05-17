@@ -6,13 +6,6 @@ export type InventoryStatus =
   | "ADEQUATE"
   | "SURPLUS";
 
-export type InventoryCategory =
-  | "PPE"
-  | "LIFE_SUPPORT"
-  | "BLOOD"
-  | "MEDICATION"
-  | "GENERAL_SUPPLIES";
-
 /**
  * A single inventory entry living in the subcollection
  * `hospitals/{hospitalId}/inventory/{entryId}`.

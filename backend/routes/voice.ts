@@ -1,8 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { processInventoryUpdate, getInventoryEntry } from "../services/inventoryService.js";
 import { getItemById } from "../services/itemService.js";
-import { getHospitalById } from "../services/hospitalService.js";
-
 const router = Router();
 
 // Simple shared secret check
@@ -31,13 +29,14 @@ router.post("/webhook", verifySecret, async (req: Request, res: Response) => {
     console.log(`[Voice] Tool called: ${tool_name}`, parameters);
 
     if (tool_name === "update_inventory") {
-      const { entryId, change, hospitalId } = parameters;
+      const { entryId, change, hospitalId, nurseId } = parameters;
       
       const result = await processInventoryUpdate({
         hospitalId,
         entryId,
         change,
-        source: "VOICE_COMMAND",
+        nurseId,
+        source: nurseId ? "VOICE_COMMAND" : "SYSTEM",
         message: `Voice update: ${change > 0 ? 'Added' : 'Removed'} ${Math.abs(change)} items.`
       });
 
@@ -46,10 +45,9 @@ router.post("/webhook", verifySecret, async (req: Request, res: Response) => {
 
       let responseMessage = `Successfully updated ${itemName}. The new count is ${result.newCount}.`;
       
-      if (result.transferRequest) {
-        const fromHospital = await getHospitalById(result.transferRequest.fromHospitalId);
-        const fromHospitalName = fromHospital ? fromHospital.name : "another facility";
-        responseMessage += ` I've also initiated an emergency transfer of supplies from ${fromHospitalName} to cover the shortage.`;
+      if (result.transferCreated) {
+        responseMessage +=
+          " I've also initiated an emergency transfer from another facility to cover the shortage.";
       }
 
       res.json({ result: responseMessage });

@@ -9,11 +9,17 @@ import { getHospitalById } from "../services/hospitalService.js";
 import { createTransferRequest } from "../services/inventoryService.js";
 import { getItemById } from "../services/itemService.js";
 import type { TransferRequest } from "../models/index.js";
-import type { UrgencyLevel } from "../models/transferRequests.js";
+import type { InventoryCategory } from "../models/transferRequests.js";
 
 const router = Router();
 
-const VALID_URGENCIES: UrgencyLevel[] = ["LOW", "NORMAL", "HIGH", "CRITICAL"];
+const VALID_CATEGORIES: InventoryCategory[] = [
+  "PPE",
+  "LIFE_SUPPORT",
+  "BLOOD",
+  "MEDICATION",
+  "GENERAL_SUPPLIES",
+];
 
 /**
  * GET /api/requests
@@ -39,12 +45,12 @@ router.get("/", async (_req: Request, res: Response) => {
  */
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { fromHospitalId, itemId, quantity, reason, staffName, urgency } =
+    const { fromHospitalId, itemId, itemName, itemCategory, quantity, reason, staffName } =
       req.body ?? {};
 
-    if (!fromHospitalId || !itemId || quantity === undefined) {
+    if (!fromHospitalId || quantity === undefined) {
       res.status(400).json({
-        error: "fromHospitalId, itemId, and quantity are required",
+        error: "fromHospitalId and quantity are required",
       });
       return;
     }
@@ -58,40 +64,53 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
-    if (urgency !== undefined && !VALID_URGENCIES.includes(urgency)) {
-      res.status(400).json({
-        error: `Invalid urgency. Must be one of: ${VALID_URGENCIES.join(", ")}`,
-      });
-      return;
-    }
-
-    const [fromHospital, item] = await Promise.all([
-      getHospitalById(fromHospitalId),
-      getItemById(itemId),
-    ]);
-
+    const fromHospital = await getHospitalById(fromHospitalId);
     if (!fromHospital) {
       res.status(404).json({ error: "Requesting hospital not found" });
       return;
     }
-    if (!item) {
-      res.status(404).json({ error: "Item not found" });
+
+    let resolvedItemId: string | undefined;
+    let resolvedItemName: string;
+    let resolvedCategory: InventoryCategory;
+
+    if (itemId) {
+      const item = await getItemById(itemId);
+      if (!item) {
+        res.status(404).json({ error: "Item not found" });
+        return;
+      }
+      resolvedItemId = item.id;
+      resolvedItemName = item.name;
+      resolvedCategory = item.category;
+    } else if (
+      typeof itemName === "string" &&
+      itemName.trim() &&
+      itemCategory &&
+      VALID_CATEGORIES.includes(itemCategory)
+    ) {
+      resolvedItemName = itemName.trim();
+      resolvedCategory = itemCategory;
+    } else {
+      res.status(400).json({
+        error: "Provide itemId or both itemName and itemCategory",
+      });
       return;
     }
 
     const now = Timestamp.now();
     const requestData: Omit<TransferRequest, "requestId"> = {
       requestType: "INVENTORY_SHORTAGE",
-      urgencyLevel: urgency ?? "NORMAL",
-      itemId,
-      itemCategory: item.category,
-      itemName: item.name,
+      urgencyLevel: "NORMAL",
+      itemId: resolvedItemId,
+      itemCategory: resolvedCategory,
+      itemName: resolvedItemName,
       quantity,
       fromHospitalId: fromHospital.id!,
       fromHospitalName: fromHospital.name,
       staffName: staffName ?? "Unknown staff",
       status: "PENDING",
-      reason: reason ?? `Supply request for ${item.name}`,
+      reason: reason ?? `Supply request for ${resolvedItemName}`,
       createdAt: now,
       updatedAt: now,
     };

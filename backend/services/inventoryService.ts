@@ -1,6 +1,17 @@
 import { db } from "../config/firebase-config.js";
 import { logInventoryChange } from "../utils/logger.js";
-import type { InventoryEntry, Log, TransferRequest, InventoryStatus } from "../models/index.js";
+import type {
+  InventoryEntry,
+  Log,
+  LogActor,
+  InventoryStatus,
+  TransferRequest,
+} from "../models/index.js";
+import { SYSTEM_LOG_ACTOR } from "../models/logActor.js";
+import {
+  assertNurseHospitalAccess,
+  getUserById,
+} from "./userService.js";
 import { Timestamp } from "firebase-admin/firestore";
 import { getHospitalById } from "./hospitalService.js";
 import { autoCreateTransfer } from "./transferService.js";
@@ -138,9 +149,10 @@ export async function createTransferRequest(
 
 // ── Logging ─────────────────────────────────────────────────────────────
 
-export async function createInventoryLog(data: Log): Promise<void> {
-  const { id: _id, createdAt: _createdAt, ...payload } = data;
-  await logInventoryChange(payload);
+export async function createInventoryLog(
+  data: Omit<Log, "id" | "createdAt">
+): Promise<void> {
+  await logInventoryChange(data);
 }
 
 // ── Business Logic ──────────────────────────────────────────────────────
@@ -157,22 +169,47 @@ export interface ProcessInventoryUpdateInput {
   hospitalId: string;
   entryId: string;
   change: number;
+  /** Nurse user id; omitted for system-attributed changes. */
+  nurseId?: string;
   source?: InventoryUpdateSource;
   message?: string;
 }
 
-export interface ProcessInventoryUpdateResult {
+const SYSTEM_ATTRIBUTED_SOURCES: InventoryUpdateSource[] = [
+  "SYSTEM",
+  "DEMO_BUTTON",
+];
+
+async function resolveLogActor(
+  hospitalId: string,
+  nurseId: string | undefined,
+  source: InventoryUpdateSource
+): Promise<LogActor> {
+  if (nurseId) {
+    const user = await getUserById(nurseId);
+    if (!user) throw new Error(`Nurse not found: ${nurseId}`);
+    assertNurseHospitalAccess(user, hospitalId);
+    return { type: "nurse", userId: user.id!, name: user.name };
+  }
+
+  if (SYSTEM_ATTRIBUTED_SOURCES.includes(source)) {
+    return SYSTEM_LOG_ACTOR;
+  }
+
+  throw new Error(`nurseId is required for source "${source}"`);
+}
+
+/** Lean PATCH response — no duplicate log payload. */
+export interface InventoryUpdateResponse {
   success: boolean;
   hospitalId: string;
   entryId: string;
   itemId: string;
-  previousCount: number;
   newCount: number;
-  previousAvailableCount: number;
   newAvailableCount: number;
   status: InventoryStatus;
-  log: Log;
-  transferRequest: TransferRequest | null;
+  performedBy: LogActor;
+  transferCreated: boolean;
 }
 
 /**
@@ -181,7 +218,7 @@ export interface ProcessInventoryUpdateResult {
  */
 export async function processInventoryUpdate(
   input: ProcessInventoryUpdateInput
-): Promise<ProcessInventoryUpdateResult> {
+): Promise<InventoryUpdateResponse> {
   const { hospitalId, entryId, change } = input;
 
   if (!hospitalId || !entryId) {
@@ -191,8 +228,14 @@ export async function processInventoryUpdate(
     throw new Error("change must be a finite number");
   }
 
-  const source: InventoryUpdateSource = input.source ?? "SYSTEM";
+  const source: InventoryUpdateSource =
+    input.source ?? (input.nurseId ? "MANUAL_FORM" : "SYSTEM");
   const now = Timestamp.now();
+  const performedBy = await resolveLogActor(
+    hospitalId,
+    input.nurseId,
+    source
+  );
 
   const hospital = await getHospitalById(hospitalId);
   if (!hospital) throw new Error(`Hospital not found: ${hospitalId}`);
@@ -215,8 +258,7 @@ export async function processInventoryUpdate(
   });
 
   // 2. Log
-  const log: Log = {
-    id: "",
+  await createInventoryLog({
     hospitalId,
     inventoryEntryId: entry.id!,
     previousCount,
@@ -224,17 +266,22 @@ export async function processInventoryUpdate(
     newCount,
     previousAvailableCount,
     newAvailableCount,
+    performedBy,
     source,
     message: input.message,
-    createdAt: now,
-  };
-  await createInventoryLog(log);
+  });
 
   // 3. Auto-transfer if shortage
-  let transferRequest: TransferRequest | null = null;
+  let transferCreated = false;
   if (newStatus === "LOW" || newStatus === "CRITICAL_SHORTAGE") {
     const quantityNeeded = Math.max(entry.threshold - newAvailableCount, 1);
-    transferRequest = await autoCreateTransfer(hospital, entry.itemId, quantityNeeded, newStatus);
+    const transferRequest = await autoCreateTransfer(
+      hospital,
+      entry.itemId,
+      quantityNeeded,
+      newStatus
+    );
+    transferCreated = transferRequest !== null;
   }
 
   return {
@@ -242,12 +289,10 @@ export async function processInventoryUpdate(
     hospitalId,
     entryId: entry.id!,
     itemId: entry.itemId,
-    previousCount,
     newCount,
-    previousAvailableCount,
     newAvailableCount,
     status: newStatus,
-    log,
-    transferRequest,
+    performedBy,
+    transferCreated,
   };
 }
